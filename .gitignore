@@ -1,0 +1,9 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.tmp*
+.cache*
+.gocache
+.gotmp
+coverage.out
