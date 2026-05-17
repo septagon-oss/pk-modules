@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"net/mail"
 	"net/url"
 	"path"
 	"reflect"
@@ -101,31 +102,75 @@ func NormalizePublicLink(link string) string {
 	return parsed.String()
 }
 
-func ExternalURL(raw string) template.URL {
+func ExternalURL(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return template.URL("")
+		return ""
 	}
-	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
-		return template.URL(raw)
+	if parsed, err := url.Parse(raw); err == nil && parsed.Scheme != "" {
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return ""
+		}
+		if parsed.Host == "" {
+			return ""
+		}
+		return parsed.String()
 	}
-	return template.URL("https://" + raw)
+	parsed, err := url.Parse("https://" + raw)
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+	return parsed.String()
 }
 
-func Mailto(email string) template.URL {
+func Mailto(email string) string {
 	email = strings.TrimSpace(email)
 	if email == "" {
-		return template.URL("")
+		return ""
 	}
-	return template.URL("mailto:" + email)
+	if strings.ContainsAny(email, "\r\n<>\"") {
+		return ""
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return ""
+	}
+	return (&url.URL{Scheme: "mailto", Opaque: email}).String()
 }
 
-func Tel(phone string) template.URL {
+func Tel(phone string) string {
 	phone = strings.TrimSpace(phone)
 	if phone == "" {
-		return template.URL("")
+		return ""
 	}
-	return template.URL("tel:" + phone)
+	normalized, ok := normalizeTelephone(phone)
+	if !ok {
+		return ""
+	}
+	return "tel:" + normalized
+}
+
+func normalizeTelephone(phone string) (string, bool) {
+	var b strings.Builder
+	digits := 0
+	for _, r := range phone {
+		switch {
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+			digits++
+		case r == '+' && b.Len() == 0:
+			b.WriteRune(r)
+		case r == '-' || r == '.' || r == '(' || r == ')':
+			b.WriteRune(r)
+		case r == ' ' || r == '\t':
+			continue
+		default:
+			return "", false
+		}
+	}
+	if digits == 0 {
+		return "", false
+	}
+	return b.String(), true
 }
 
 func PlanPrice(plan any) string {

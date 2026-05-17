@@ -78,6 +78,27 @@ func TestRenderFragmentUsesOverlayTemplateFuncs(t *testing.T) {
 	}
 }
 
+func TestURLHelpersNormalizeAndRejectUnsafeSchemes(t *testing.T) {
+	if got := ExternalURL("platformkit.dev/docs"); got != "https://platformkit.dev/docs" {
+		t.Fatalf("ExternalURL() = %q", got)
+	}
+	if got := ExternalURL("javascript:alert(1)"); got != "" {
+		t.Fatalf("ExternalURL() accepted unsafe scheme: %q", got)
+	}
+	if got := Mailto("hello@platformkit.dev"); got != "mailto:hello@platformkit.dev" {
+		t.Fatalf("Mailto() = %q", got)
+	}
+	if got := Mailto("hello@platformkit.dev\r\nbcc:evil@example.com"); got != "" {
+		t.Fatalf("Mailto() accepted header injection: %q", got)
+	}
+	if got := Tel("+351 211 000 000"); got != "tel:+351211000000" {
+		t.Fatalf("Tel() = %q", got)
+	}
+	if got := Tel("javascript:alert(1)"); got != "" {
+		t.Fatalf("Tel() accepted unsafe phone: %q", got)
+	}
+}
+
 func TestPublicAssetURLAndBodyClass(t *testing.T) {
 	if got := PublicAssetURL("platformkit", "homepage.css"); got != "/assets/overlays/platformkit/homepage.css" {
 		t.Fatalf("PublicAssetURL() = %q", got)
