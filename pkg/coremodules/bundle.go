@@ -1,6 +1,12 @@
 // Package coremodules provides the smallest OSS module pack.
 package coremodules
 
+// bundle.go owns the minimal public module bundle used by OSS examples and
+// downstream PlatformKit distributions.
+//
+// ADR: ADR-0009 (ports-only module communication), ADR-0017 (composition through dependency injection), ADR-0029 (file purpose declaration).
+// Convention: C-14 (every Go file declares its purpose).
+
 import "github.com/septagon-oss/pk-core/pkg/module"
 
 // TenantService is the minimal tenant contract exposed by the tenant module.

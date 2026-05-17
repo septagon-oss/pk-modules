@@ -1,9 +1,15 @@
 # pk-modules
 
-Minimal OSS module pack for PlatformKit.
+Starter OSS module pack for PlatformKit.
 
-This repo should contain generic modules only. Paid modules, vertical modules,
-client overlays, and hosted operational modules belong in Pro/private packs.
+This repo contains generic modules that demonstrate the public PlatformKit
+module contract. It should stay useful without becoming a product dump:
+community modules can follow these patterns, while vertical modules, client
+overlays, and hosted operational modules belong in Pro/private packs.
+
+The repo also publishes `.platformkit/docs.manifest.yaml` so `pk-docs` can
+federate the module-pack overview through the same public documentation model
+used by downstream module packs.
 
 ## Current Surface
 
@@ -12,5 +18,6 @@ client overlays, and hosted operational modules belong in Pro/private packs.
 ## Verify
 
 ```bash
-go test ./...
+make verify
+make staticcheck
 ```

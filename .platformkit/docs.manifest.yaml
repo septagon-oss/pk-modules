@@ -1,0 +1,16 @@
+schema_version: 1
+component_id: pk-modules
+title: PlatformKit OSS Modules
+federation:
+  assemblers: [antora, techdocs]
+  reference_sources: [openapi, asyncapi, jsonschema]
+repo_topics:
+  - id: module-pack-overview
+    title: Module Pack Overview
+    path: README.md
+    dita_type: concept
+    diataxis: explanation
+pilot_modules: []
+module_docs:
+  manifest_path: docs.manifest.yaml
+  required_diataxis: [explanation, how-to, reference]
