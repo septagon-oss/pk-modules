@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -34,7 +34,7 @@ func LoadTemplateSource(siteDir, locale, explicit string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve overlay homepage partials in %s: %w", siteDir, err)
 	}
-	sort.Strings(partials)
+	slices.Sort(partials)
 
 	parts := []string{mainTemplate}
 	for _, partial := range partials {
@@ -74,7 +74,8 @@ func ResolveAssetNames(siteDir, locale string, files []string, fallback string) 
 	if len(files) > 0 {
 		candidates = append(candidates, files...)
 	} else {
-		candidates = append(candidates, "homepage."+locale+"."+strings.TrimPrefix(fallback, "homepage."))
+		fallbackSuffix, _ := strings.CutPrefix(fallback, "homepage.")
+		candidates = append(candidates, "homepage."+locale+"."+fallbackSuffix)
 		candidates = append(candidates, fallback)
 	}
 

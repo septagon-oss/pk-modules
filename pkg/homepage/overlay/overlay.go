@@ -85,8 +85,8 @@ func NormalizePublicLink(link string) string {
 	pathValue := parsed.Path
 	for _, locale := range []string{"en", "pt"} {
 		prefix := "/" + locale + "/"
-		if strings.HasPrefix(pathValue, prefix) {
-			pathValue = "/" + strings.TrimPrefix(pathValue, prefix)
+		if after, ok := strings.CutPrefix(pathValue, prefix); ok {
+			pathValue = "/" + after
 			break
 		}
 		if pathValue == "/"+locale {
@@ -186,7 +186,7 @@ func Dict(values ...any) (map[string]any, error) {
 
 func PublicAssetURL(clientSlug, relativePath string) string {
 	clientSlug = strings.Trim(strings.TrimSpace(clientSlug), "/")
-	relativePath = strings.TrimPrefix(path.Clean("/"+strings.TrimSpace(relativePath)), "/")
+	relativePath, _ = strings.CutPrefix(path.Clean("/"+strings.TrimSpace(relativePath)), "/")
 	if clientSlug == "" || relativePath == "." || relativePath == "" {
 		return ""
 	}
