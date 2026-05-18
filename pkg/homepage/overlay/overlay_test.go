@@ -117,6 +117,116 @@ func TestDictRejectsInvalidPairs(t *testing.T) {
 	}
 }
 
+func TestRenderFragment_SeptagonEditorialFixture(t *testing.T) {
+	// Resolve the Septagon template path relative to this test's working
+	// directory. The pk-modules repo lives at
+	// septagon-oss-workspace/pk-modules; the template lives at
+	// septagon-clients/septagon/apps/complete-saas/site/homepage.template.html.
+	tmplPath := filepath.Join("..", "..", "..", "..", "..", "septagon-clients", "septagon", "apps", "complete-saas", "site", "homepage.template.html")
+	if envPath := os.Getenv("SEPTAGON_OVERLAY_TEMPLATE"); envPath != "" {
+		tmplPath = envPath
+	}
+	tmpl, err := os.ReadFile(tmplPath)
+	if err != nil {
+		t.Skipf("septagon overlay template not co-located: %v", err)
+	}
+
+	view := map[string]any{
+		"Branding": map[string]string{"LogoAlt": "Septagon"},
+		"Navbar": map[string]any{
+			"Links":      []map[string]string{{"Title": "Manifesto", "Href": "#manifesto"}},
+			"JoinUsText": "Start a project",
+			"JoinUsHref": "#contact",
+		},
+		"Hero": map[string]string{
+			"Title":         "We build the",
+			"Subtitle":      "Studio for the unfair version.",
+			"PrimaryLink":   "#contact",
+			"PrimaryCTA":    "Start a project",
+			"SecondaryLink": "#dispatches",
+			"SecondaryCTA":  "See dispatches",
+		},
+		"Kinetic": map[string]any{"Words": []string{"exact", "evident"}},
+		"Marquee": map[string]any{"Signal": []string{"platform engineering", "ai systems"}},
+		"Sections": []map[string]any{
+			{"ID": "system-design", "Title": "Design", "Subtitle": "Model the system."},
+			{"ID": "execution", "Title": "Execute", "Subtitle": "Ship with control."},
+			{"ID": "governance", "Title": "Govern", "Subtitle": "Keep control as it scales."},
+		},
+		"Field": []map[string]any{
+			{"N": "01", "Title": "Platform engineering", "Body": "Contracts.", "Tags": []string{"Go"}, "Focus": false},
+			{"N": "03", "Title": "Healthtech", "Body": "EHR.", "Tags": []string{"FHIR"}, "Focus": true},
+		},
+		"Dispatches": []map[string]any{
+			{"Year": "2024", "Vertical": "Clinical", "Title": "EDC", "Body": "Body.", "Tags": []string{"Go"}, "Kpi": "9 sites", "Accent": "molten"},
+		},
+		"Phases": []map[string]any{
+			{"N": "01", "Title": "Frame", "Body": "Map the system.", "Out": "Architecture index"},
+			{"N": "02", "Title": "Build", "Body": "Embed engineers.", "Out": "Shipping cadence"},
+		},
+		"Contact": map[string]string{
+			"Description": "Send us the hard one.",
+			"Email":       "hello@septagon.dev",
+		},
+		"Footer": map[string]string{"Location": "Lisbon", "Address": "Remote"},
+		"Social": []map[string]string{},
+	}
+
+	out, err := RenderFragment(RenderInput{
+		TemplateSource: string(tmpl),
+		View:           view,
+		AssetBase:      "/assets/overlays/septagon",
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	// Plate framing must be present.
+	for _, want := range []string{
+		"Plate 00 / Hero",
+		"Plate I / Manifesto",
+		"Plate II / Field manual",
+		"Plate IV / Dispatches",
+		"Plate V / Operating model",
+		"Plate VII / Contact",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered output missing plate framing %q", want)
+		}
+	}
+
+	// Motion CSS vars must be referenced (not hardcoded literals).
+	for _, want := range []string{
+		"var(--motion-duration-marquee)",
+		"var(--motion-duration-kinetic-cycle)",
+		"var(--motion-duration-status-blink)",
+		"var(--motion-duration-typewriter-out)",
+		"var(--motion-duration-caret-blink)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered output missing motion var %q", want)
+		}
+	}
+
+	// Hardcoded animation durations must NOT have crept in.
+	for _, badPattern := range []string{
+		"animation-duration:60s",
+		"caret-blink_0.85s",
+	} {
+		if strings.Contains(out, badPattern) {
+			t.Errorf("rendered output contains hardcoded motion literal %q — should be a token var", badPattern)
+		}
+	}
+
+	// Content keys must surface.
+	if !strings.Contains(out, "hello@septagon.dev") {
+		t.Error("contact email missing from rendered output")
+	}
+	if !strings.Contains(out, "Healthtech") {
+		t.Error("focus discipline missing from rendered output")
+	}
+}
+
 func mustWrite(t *testing.T, path string, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
