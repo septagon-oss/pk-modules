@@ -59,6 +59,9 @@ func FuncMap(assetBase string, extra template.FuncMap) template.FuncMap {
 		"price":    PlanPrice,
 		"nonEmpty": NonEmpty,
 		"dict":     Dict,
+		"add":      func(a, b int) int { return a + b },
+		"mul":      func(a, b int) int { return a * b },
+		"printf":   fmt.Sprintf,
 	}
 	for name, fn := range extra {
 		if strings.TrimSpace(name) == "" || fn == nil {
