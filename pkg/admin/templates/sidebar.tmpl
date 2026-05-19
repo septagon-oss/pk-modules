@@ -1,0 +1,12 @@
+{{define "sidebar"}}
+{{- if .Sidebar -}}
+{{range .Sidebar}}
+  <h2>{{.Label}}</h2>
+  <ul>
+    {{range .Items}}<li><a href="{{$.BasePath}}{{.Path}}">{{.Label}}</a></li>{{end}}
+  </ul>
+{{end}}
+{{- else -}}
+  <p class="pk-muted">No modules registered.</p>
+{{- end -}}
+{{end}}

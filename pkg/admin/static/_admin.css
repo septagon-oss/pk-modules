@@ -1,0 +1,163 @@
+/* _admin.css — minimal hand-written stylesheet for the OSS admin shell.
+ *
+ * v0.0.0 ships a hand-tuned ~100-line CSS so the admin remains self-contained
+ * and renderable in a browser without an external build step. v0.0.1 will
+ * generate this file from pk-design tokens so OSS and Pro stay visually in
+ * sync.
+ *
+ * Convention: light theme, neutral colors, system sans-serif body, monospace
+ * tables, simple form layout. Avoid heavy frameworks.
+ */
+
+:root {
+  --pk-bg: #ffffff;
+  --pk-fg: #1f2937;
+  --pk-muted: #6b7280;
+  --pk-border: #e5e7eb;
+  --pk-accent: #2563eb;
+  --pk-accent-fg: #ffffff;
+  --pk-row-alt: #f9fafb;
+  --pk-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --pk-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--pk-sans);
+  color: var(--pk-fg);
+  background: var(--pk-bg);
+  line-height: 1.5;
+}
+
+header.pk-admin-header {
+  border-bottom: 1px solid var(--pk-border);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header.pk-admin-header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.pk-admin-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: calc(100vh - 60px);
+}
+
+aside.pk-admin-sidebar {
+  border-right: 1px solid var(--pk-border);
+  padding: 16px;
+  background: var(--pk-row-alt);
+}
+
+aside.pk-admin-sidebar h2 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pk-muted);
+}
+
+aside.pk-admin-sidebar ul {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+aside.pk-admin-sidebar li a {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--pk-fg);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+aside.pk-admin-sidebar li a:hover {
+  background: var(--pk-bg);
+}
+
+main.pk-admin-content {
+  padding: 24px;
+}
+
+main.pk-admin-content h2 {
+  margin-top: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+main.pk-admin-content p { margin: 8px 0; color: var(--pk-fg); }
+main.pk-admin-content .pk-muted { color: var(--pk-muted); }
+
+table.pk-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--pk-mono);
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+table.pk-admin-table th,
+table.pk-admin-table td {
+  border-bottom: 1px solid var(--pk-border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+table.pk-admin-table th {
+  background: var(--pk-row-alt);
+  font-weight: 600;
+  color: var(--pk-muted);
+}
+
+table.pk-admin-table tr:nth-child(even) td { background: var(--pk-row-alt); }
+
+form.pk-admin-form { display: grid; gap: 12px; max-width: 480px; margin-top: 12px; }
+
+form.pk-admin-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--pk-muted);
+}
+
+form.pk-admin-form input,
+form.pk-admin-form textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--pk-border);
+  border-radius: 4px;
+  background: var(--pk-bg);
+  color: var(--pk-fg);
+}
+
+form.pk-admin-form button {
+  justify-self: start;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--pk-accent);
+  color: var(--pk-accent-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+code, .pk-mono { font-family: var(--pk-mono); font-size: 13px; }
+
+.pk-card {
+  border: 1px solid var(--pk-border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin: 8px 0;
+  background: var(--pk-bg);
+}

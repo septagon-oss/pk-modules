@@ -1,0 +1,20 @@
+{{define "home"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+<h2>Dashboard</h2>
+<p class="pk-muted">{{len .Modules}} module(s) have registered admin surfaces.</p>
+{{range .Modules}}
+<div class="pk-card">
+  <h3 style="margin:0 0 6px">{{.ModuleID}}</h3>
+  {{if .Entities}}
+  <p class="pk-muted" style="margin:0 0 4px">Entities</p>
+  <ul>{{range .Entities}}<li><a href="{{$.BasePath}}/{{.ModuleID}}/{{.EntityName}}">{{.EntityName}}</a> <code class="pk-mono">{{.APIPath}}</code></li>{{end}}</ul>
+  {{end}}
+  {{if .Pages}}
+  <p class="pk-muted" style="margin:0 0 4px">Pages</p>
+  <ul>{{range .Pages}}<li><a href="{{$.BasePath}}{{.Path}}">{{.Title}}</a></li>{{end}}</ul>
+  {{end}}
+</div>
+{{else}}
+<p class="pk-muted">No admin surfaces have been registered yet.</p>
+{{end}}
+{{end}}

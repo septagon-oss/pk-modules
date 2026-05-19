@@ -1,0 +1,44 @@
+{{define "entity_form"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+<h2>{{if .EntityID}}Edit {{.Entity.EntityName}}{{else}}New {{.Entity.EntityName}}{{end}}</h2>
+<p class="pk-muted">Module <code class="pk-mono">{{.Entity.ModuleID}}</code> — API <code class="pk-mono">{{.Entity.APIPath}}</code></p>
+<form class="pk-admin-form" id="pk-entity-form">
+  <label>id (auto)
+    <input name="id" value="{{.EntityID}}" {{if .EntityID}}readonly{{end}}>
+  </label>
+  <label>payload (JSON)
+    <textarea name="payload" rows="10" placeholder='{"key": "value"}'></textarea>
+  </label>
+  <button type="submit">{{if .EntityID}}Save{{else}}Create{{end}}</button>
+</form>
+<p>
+  <a href="{{.BasePath}}/{{.Entity.ModuleID}}/{{.Entity.EntityName}}">Back to list</a>
+</p>
+<script>
+(function(){
+  var apiPath = {{.Entity.APIPath}};
+  var id = {{.EntityID}};
+  var form = document.getElementById("pk-entity-form");
+  if (id) {
+    fetch(apiPath + "/" + encodeURIComponent(id), {credentials:"same-origin"})
+      .then(function(r){return r.json();})
+      .then(function(row){
+        form.payload.value = JSON.stringify(row, null, 2);
+      }).catch(function(){});
+  }
+  form.addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var body = form.payload.value || "{}";
+    var url = id ? apiPath + "/" + encodeURIComponent(id) : apiPath;
+    var method = id ? "PUT" : "POST";
+    fetch(url, {method: method, headers:{"Content-Type":"application/json"}, body: body, credentials:"same-origin"})
+      .then(function(r){
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        window.location.href = {{.BasePath}} + "/" + {{.Entity.ModuleID}} + "/" + {{.Entity.EntityName}};
+      }).catch(function(err){
+        alert(err);
+      });
+  });
+})();
+</script>
+{{end}}

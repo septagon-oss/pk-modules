@@ -1,0 +1,41 @@
+{{define "entity_list"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+<h2>{{.Entity.EntityName}}</h2>
+<p class="pk-muted">Module <code class="pk-mono">{{.Entity.ModuleID}}</code> — API <code class="pk-mono">{{.Entity.APIPath}}</code></p>
+<p>
+  <a href="{{.BasePath}}/{{.Entity.ModuleID}}/{{.Entity.EntityName}}/new">+ New {{.Entity.EntityName}}</a>
+</p>
+<p class="pk-muted">
+  The list view fetches rows from <code class="pk-mono">{{.Entity.APIPath}}</code>
+  at render time. Pro replaces this server-rendered table with a live SPA.
+</p>
+<table class="pk-admin-table" id="pk-entity-list">
+  <thead><tr><th>id</th><th>summary</th></tr></thead>
+  <tbody><tr><td colspan="2" class="pk-muted">loading…</td></tr></tbody>
+</table>
+<script>
+(function(){
+  var url = {{.Entity.APIPath}};
+  fetch(url, {credentials: "same-origin"}).then(function(r){return r.json();}).then(function(rows){
+    var tbody = document.querySelector("#pk-entity-list tbody");
+    if (!Array.isArray(rows)) { rows = (rows && rows.items) || []; }
+    tbody.innerHTML = "";
+    rows.forEach(function(row){
+      var tr = document.createElement("tr");
+      var idCell = document.createElement("td");
+      idCell.textContent = row.id || row.ID || "";
+      var summaryCell = document.createElement("td");
+      summaryCell.textContent = JSON.stringify(row);
+      tr.appendChild(idCell); tr.appendChild(summaryCell);
+      tbody.appendChild(tr);
+    });
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" class="pk-muted">no rows</td></tr>';
+    }
+  }).catch(function(err){
+    var tbody = document.querySelector("#pk-entity-list tbody");
+    tbody.innerHTML = '<tr><td colspan="2" class="pk-muted">error: '+ err +'</td></tr>';
+  });
+})();
+</script>
+{{end}}
