@@ -184,9 +184,9 @@ func (s *service) InvalidateAllSessions(ctx context.Context, userID string) erro
 	return nil
 }
 
-// lookupUser resolves a user by the credential carrier. The OSS surface
-// supports email; Pro replaces lookupUser to support username, SSO, and
-// federated identity.
+// lookupUser resolves a user by the credential carrier. Both email and
+// username are supported in v0.0.0; Pro replaces lookupUser to layer SSO,
+// federated identity, and risk-aware lookups.
 func (s *service) lookupUser(ctx context.Context, tenantID string, creds Credentials) (*user.User, error) {
 	if s.users == nil {
 		return nil, errors.New("auth: no user reader configured")
@@ -194,12 +194,12 @@ func (s *service) lookupUser(ctx context.Context, tenantID string, creds Credent
 	switch {
 	case strings.TrimSpace(creds.Email) != "":
 		return s.users.GetByEmail(ctx, tenantID, creds.Email)
+	case strings.TrimSpace(creds.Username) != "":
+		return s.users.GetByUsername(ctx, tenantID, creds.Username)
 	default:
-		// Username-based lookup is not part of UserBoundaryReader in v0.0.0;
-		// callers wiring Pro readers may extend this. For now we treat a
-		// username-only credential as "unknown" so the caller cannot
-		// distinguish wrong-password from missing-feature.
-		return nil, errors.New("auth: username login not supported in OSS")
+		// Credentials.Identifier() should have caught this; this branch
+		// exists as a defensive fallback.
+		return nil, ErrNoCredentials
 	}
 }
 

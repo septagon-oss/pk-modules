@@ -36,15 +36,17 @@ func sqliteDSN(t *testing.T) string {
 // tests. It allows us to control PassHash, Active, and lookup behaviors
 // without spinning up the full user_management module.
 type fakeUserReader struct {
-	mu    sync.Mutex
-	byID  map[string]*user.User
-	byKey map[string]*user.User // tenantID + "|" + email
+	mu         sync.Mutex
+	byID       map[string]*user.User
+	byEmail    map[string]*user.User // tenantID + "|" + email
+	byUsername map[string]*user.User // tenantID + "|" + username
 }
 
 func newFakeUserReader() *fakeUserReader {
 	return &fakeUserReader{
-		byID:  map[string]*user.User{},
-		byKey: map[string]*user.User{},
+		byID:       map[string]*user.User{},
+		byEmail:    map[string]*user.User{},
+		byUsername: map[string]*user.User{},
 	}
 }
 
@@ -52,7 +54,12 @@ func (f *fakeUserReader) add(u *user.User) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.byID[u.ID] = u
-	f.byKey[u.TenantID+"|"+u.Email] = u
+	if u.Email != "" {
+		f.byEmail[u.TenantID+"|"+u.Email] = u
+	}
+	if u.Username != "" {
+		f.byUsername[u.TenantID+"|"+u.Username] = u
+	}
 }
 
 func (f *fakeUserReader) Get(_ context.Context, id string) (*user.User, error) {
@@ -67,7 +74,16 @@ func (f *fakeUserReader) Get(_ context.Context, id string) (*user.User, error) {
 func (f *fakeUserReader) GetByEmail(_ context.Context, tenantID, email string) (*user.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if u, ok := f.byKey[tenantID+"|"+email]; ok {
+	if u, ok := f.byEmail[tenantID+"|"+email]; ok {
+		return u, nil
+	}
+	return nil, errors.New("user not found")
+}
+
+func (f *fakeUserReader) GetByUsername(_ context.Context, tenantID, username string) (*user.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if u, ok := f.byUsername[tenantID+"|"+username]; ok {
 		return u, nil
 	}
 	return nil, errors.New("user not found")
@@ -169,6 +185,41 @@ func TestLoginWithCorrectPassword(t *testing.T) {
 	}
 	if !sess.ExpiresAt.After(sess.IssuedAt) {
 		t.Fatalf("expires_at not after issued_at: %+v", sess)
+	}
+}
+
+func TestAuthLoginWithUsernameSucceeds(t *testing.T) {
+	t.Parallel()
+	m, reader, hasher := newModule(t)
+	u := makeUserWithPassword(t, hasher, "t-1", "u-1", "alice@example.test", "supersecret", true)
+	u.Username = "alice"
+	reader.add(u)
+
+	sess, err := m.Service().Login(context.Background(), "t-1", auth.Credentials{
+		Username: "alice",
+		Password: "supersecret",
+	})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if sess == nil {
+		t.Fatalf("Login returned nil session")
+	}
+	if sess.UserID != "u-1" || sess.TenantID != "t-1" {
+		t.Fatalf("Login returned wrong user/tenant: %+v", sess)
+	}
+}
+
+func TestAuthLoginWithUnknownUsernameFails(t *testing.T) {
+	t.Parallel()
+	m, _, _ := newModule(t)
+
+	_, err := m.Service().Login(context.Background(), "t-1", auth.Credentials{
+		Username: "ghost",
+		Password: "supersecret",
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("Login err = %v, want ErrInvalidCredentials", err)
 	}
 }
 

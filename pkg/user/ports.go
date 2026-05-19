@@ -24,11 +24,12 @@ type UserService interface {
 }
 
 // UserBoundaryReader is the Pro-consumable read-only port used by adjacent
-// modules (audit, api_key, notification) that need to resolve user identity
-// without holding a full UserService reference.
+// modules (audit, api_key, notification, auth) that need to resolve user
+// identity without holding a full UserService reference.
 type UserBoundaryReader interface {
 	Get(ctx context.Context, id string) (*User, error)
 	GetByEmail(ctx context.Context, tenantID, email string) (*User, error)
+	GetByUsername(ctx context.Context, tenantID, username string) (*User, error)
 }
 
 // UserBoundaryRoleManager is a placeholder role-management port. Roles are
