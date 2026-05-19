@@ -104,7 +104,9 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Create(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
-		case errors.Is(err, store.ErrDuplicateEmail), errors.Is(err, store.ErrDuplicateUsername):
+		case errors.Is(err, store.ErrDuplicateEmail),
+			errors.Is(err, store.ErrDuplicateUsername),
+			errors.Is(err, store.ErrUniqueConstraintViolation):
 			status = http.StatusConflict
 		}
 		http.Error(w, err.Error(), status)
@@ -125,7 +127,9 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 			status = http.StatusNotFound
-		case errors.Is(err, store.ErrDuplicateEmail), errors.Is(err, store.ErrDuplicateUsername):
+		case errors.Is(err, store.ErrDuplicateEmail),
+			errors.Is(err, store.ErrDuplicateUsername),
+			errors.Is(err, store.ErrUniqueConstraintViolation):
 			status = http.StatusConflict
 		}
 		http.Error(w, err.Error(), status)

@@ -45,4 +45,10 @@ var (
 	ErrNotFound          = errors.New("user: not found")
 	ErrDuplicateEmail    = errors.New("user: duplicate email for tenant")
 	ErrDuplicateUsername = errors.New("user: duplicate username for tenant")
+	// ErrUniqueConstraintViolation is returned when a UNIQUE constraint
+	// trips but the error message cannot be classified into a specific
+	// column (e.g., a vendor-specific message format we have not yet
+	// taught classifyUniqueError to parse). Callers should treat it as a
+	// generic conflict.
+	ErrUniqueConstraintViolation = errors.New("user: unique constraint violation")
 )

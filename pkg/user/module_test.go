@@ -17,11 +17,55 @@ import (
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
 
+	"github.com/septagon-oss/pk-modules/pkg/tenant"
+	tenantstore "github.com/septagon-oss/pk-modules/pkg/tenant/store"
 	"github.com/septagon-oss/pk-modules/pkg/user"
 	"github.com/septagon-oss/pk-modules/pkg/user/store"
 
 	_ "modernc.org/sqlite"
 )
+
+// stubTenantService satisfies tenant.TenantService for tenant-validation
+// tests. Only Get is exercised; the rest return errors so any accidental
+// reliance on them is loud.
+type stubTenantService struct {
+	known map[string]*tenant.Tenant
+}
+
+func newStubTenant(ids ...string) *stubTenantService {
+	known := make(map[string]*tenant.Tenant, len(ids))
+	for _, id := range ids {
+		known[id] = &tenant.Tenant{ID: id, Slug: id, Name: id}
+	}
+	return &stubTenantService{known: known}
+}
+
+func (s *stubTenantService) Get(_ context.Context, id string) (*tenant.Tenant, error) {
+	if t, ok := s.known[id]; ok {
+		return t, nil
+	}
+	return nil, tenantstore.ErrNotFound
+}
+
+func (*stubTenantService) GetBySlug(context.Context, string) (*tenant.Tenant, error) {
+	return nil, errors.New("stub: GetBySlug not implemented")
+}
+
+func (*stubTenantService) List(context.Context) ([]*tenant.Tenant, error) {
+	return nil, errors.New("stub: List not implemented")
+}
+
+func (*stubTenantService) Create(context.Context, *tenant.Tenant) error {
+	return errors.New("stub: Create not implemented")
+}
+
+func (*stubTenantService) Update(context.Context, *tenant.Tenant) error {
+	return errors.New("stub: Update not implemented")
+}
+
+func (*stubTenantService) Delete(context.Context, string) error {
+	return errors.New("stub: Delete not implemented")
+}
 
 func sqliteDSN(t *testing.T) string {
 	t.Helper()
@@ -62,6 +106,62 @@ func TestNewModuleDefaults(t *testing.T) {
 	}
 	if m.Hasher() == nil {
 		t.Fatalf("Hasher() is nil")
+	}
+}
+
+func TestCreateValidatesTenantWhenServiceWired(t *testing.T) {
+	t.Parallel()
+	stub := newStubTenant("t-1")
+	m, err := user.NewModule(
+		user.WithSQLiteDSN(sqliteDSN(t)),
+		user.WithTenantService(stub),
+	)
+	if err != nil {
+		t.Fatalf("NewModule: %v", err)
+	}
+	ctx := context.Background()
+
+	// Known tenant — should succeed.
+	if err := m.Service().Create(ctx, makeUser("t-1", "alice")); err != nil {
+		t.Fatalf("Create with known tenant: %v", err)
+	}
+
+	// Unknown tenant — should fail with ErrUnknownTenant.
+	err = m.Service().Create(ctx, makeUser("t-ghost", "bob"))
+	if !errors.Is(err, user.ErrUnknownTenant) {
+		t.Fatalf("Create with unknown tenant err = %v, want ErrUnknownTenant", err)
+	}
+}
+
+func TestUpdateValidatesTenantWhenServiceWired(t *testing.T) {
+	t.Parallel()
+	stub := newStubTenant("t-1")
+	m, err := user.NewModule(
+		user.WithSQLiteDSN(sqliteDSN(t)),
+		user.WithTenantService(stub),
+	)
+	if err != nil {
+		t.Fatalf("NewModule: %v", err)
+	}
+	ctx := context.Background()
+	u := makeUser("t-1", "alice")
+	if err := m.Service().Create(ctx, u); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	// Mutate to an unknown tenant and Update should reject.
+	u.TenantID = "t-ghost"
+	err = m.Service().Update(ctx, u)
+	if !errors.Is(err, user.ErrUnknownTenant) {
+		t.Fatalf("Update with unknown tenant err = %v, want ErrUnknownTenant", err)
+	}
+}
+
+func TestCreateSkipsTenantValidationWhenNoService(t *testing.T) {
+	t.Parallel()
+	// No WithTenantService — the user module must remain usable standalone.
+	m := newModule(t)
+	if err := m.Service().Create(context.Background(), makeUser("t-anything", "alice")); err != nil {
+		t.Fatalf("Create without tenant service: %v", err)
 	}
 }
 

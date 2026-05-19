@@ -10,23 +10,33 @@ package user
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
 
+	"github.com/septagon-oss/pk-modules/pkg/tenant"
+	tenantstore "github.com/septagon-oss/pk-modules/pkg/tenant/store"
 	"github.com/septagon-oss/pk-modules/pkg/user/store"
 )
+
+// ErrUnknownTenant is returned by Create and Update when the user's TenantID
+// does not resolve against the wired TenantService. The check only fires
+// when a TenantService is wired; in OSS deployments without tenant_management
+// the user module still operates standalone.
+var ErrUnknownTenant = errors.New("user: unknown tenant_id")
 
 // service is the default UserService implementation. It is intentionally a
 // thin layer over store.Store so business rules live in one place.
 type service struct {
 	store  store.Store
 	hasher passhash.Hasher
+	tenant tenant.TenantService
 }
 
-func newService(s store.Store, h passhash.Hasher) *service {
-	return &service{store: s, hasher: h}
+func newService(s store.Store, h passhash.Hasher, t tenant.TenantService) *service {
+	return &service{store: s, hasher: h, tenant: t}
 }
 
 // Create inserts a new user. If u.ID is empty, the username is used as the
@@ -34,6 +44,9 @@ func newService(s store.Store, h passhash.Hasher) *service {
 // callers set credentials via SetPassword.
 func (s *service) Create(ctx context.Context, u *User) error {
 	if err := u.Validate(); err != nil {
+		return err
+	}
+	if err := s.validateTenant(ctx, u.TenantID); err != nil {
 		return err
 	}
 	if strings.TrimSpace(u.ID) == "" {
@@ -46,6 +59,29 @@ func (s *service) Create(ctx context.Context, u *User) error {
 	u.CreatedAt = row.CreatedAt
 	u.UpdatedAt = row.UpdatedAt
 	return nil
+}
+
+// validateTenant ensures the user's tenant_id resolves against the wired
+// TenantService when one is configured. When no TenantService is wired
+// (standalone OSS deployments), the check is skipped so the user module
+// remains usable without tenant_management.
+func (s *service) validateTenant(ctx context.Context, tenantID string) error {
+	if s.tenant == nil {
+		return nil
+	}
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		// User.Validate() already rejects empty tenant_id; defensive guard.
+		return nil
+	}
+	_, err := s.tenant.Get(ctx, tenantID)
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, tenantstore.ErrNotFound) {
+		return fmt.Errorf("%w: %q", ErrUnknownTenant, tenantID)
+	}
+	return fmt.Errorf("user: validate tenant: %w", err)
 }
 
 // Get returns a user by ID.
@@ -114,6 +150,9 @@ func (s *service) Update(ctx context.Context, u *User) error {
 	}
 	if strings.TrimSpace(u.ID) == "" {
 		return errors.New("user: id is required for update")
+	}
+	if err := s.validateTenant(ctx, u.TenantID); err != nil {
+		return err
 	}
 	row := toStore(u)
 	if err := s.store.Update(ctx, row); err != nil {

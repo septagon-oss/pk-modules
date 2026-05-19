@@ -252,6 +252,11 @@ func boolToInt(b bool) int {
 // classifyUniqueError inspects an error returned by sqlite and maps UNIQUE
 // constraint violations to the appropriate sentinel. We match on the error
 // message because modernc.org/sqlite exposes errors via an internal type.
+// When the message does not name a recognized column we return the generic
+// ErrUniqueConstraintViolation rather than guessing — guessing
+// "duplicate email" on every unclassified conflict (the original behavior)
+// hid real bugs by masking unrelated UNIQUE violations as user-facing email
+// duplicates.
 func classifyUniqueError(err error) error {
 	if err == nil {
 		return nil
@@ -270,5 +275,5 @@ func classifyUniqueError(err error) error {
 	case strings.Contains(msg, "username"):
 		return store.ErrDuplicateUsername
 	}
-	return store.ErrDuplicateEmail
+	return fmt.Errorf("%w: %v", store.ErrUniqueConstraintViolation, err)
 }

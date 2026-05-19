@@ -94,7 +94,7 @@ func NewModule(opts ...Option) (*Module, error) {
 		admin:  cfg.admin,
 		health: cfg.health,
 	}
-	m.svc = newService(st, cfg.hasher)
+	m.svc = newService(st, cfg.hasher, cfg.tenant)
 	m.handler = NewHandler(m.svc)
 
 	if err := registerAdmin(cfg.admin); err != nil {
