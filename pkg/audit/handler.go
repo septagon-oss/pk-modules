@@ -51,20 +51,36 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		Actor:    q.Get("actor"),
 		Action:   q.Get("action"),
 	}
+	// Malformed since/until/limit previously fell through silently, which
+	// hid pagination/time-window bugs in callers. Surface them as 400 so
+	// integration tests and humans see the mistake immediately.
 	if v := q.Get("since"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			filter.Since = t
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			http.Error(w, "invalid since: must be RFC3339", http.StatusBadRequest)
+			return
 		}
+		filter.Since = t
 	}
 	if v := q.Get("until"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			filter.Until = t
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			http.Error(w, "invalid until: must be RFC3339", http.StatusBadRequest)
+			return
 		}
+		filter.Until = t
 	}
 	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			filter.Limit = n
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			http.Error(w, "invalid limit: must be a positive integer", http.StatusBadRequest)
+			return
 		}
+		if n < 0 {
+			http.Error(w, "invalid limit: must be a positive integer", http.StatusBadRequest)
+			return
+		}
+		filter.Limit = n
 	}
 	events, err := h.reader.Query(r.Context(), filter)
 	if err != nil {

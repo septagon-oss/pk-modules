@@ -11,6 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -288,6 +290,45 @@ func TestComposeReturnsValidComposable(t *testing.T) {
 		MustBuild()
 	if _, err := pkmodule.Compose(catalog); err != nil {
 		t.Fatalf("Compose catalog: %v", err)
+	}
+}
+
+func TestHandlerListRejectsMalformedQueryParams(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"bad since", "/api/v1/audit-events?since=not-a-time"},
+		{"bad until", "/api/v1/audit-events?until=2026-13-99T00:00:00Z"},
+		{"bad limit", "/api/v1/audit-events?limit=abc"},
+		{"negative limit", "/api/v1/audit-events?limit=-3"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodGet, tc.raw, nil)
+			rec := httptest.NewRecorder()
+			m.HTTPHandler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandlerListAcceptsValidQueryParams(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/audit-events?tenant_id=t-1&since=2026-01-01T00:00:00Z&until=2027-01-01T00:00:00Z&limit=10",
+		nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
 }
 
