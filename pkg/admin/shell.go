@@ -22,6 +22,7 @@ package admin
 // Convention: C-14 (every Go file declares its purpose).
 
 import (
+	"bytes"
 	"embed"
 	"errors"
 	"fmt"
@@ -64,7 +65,12 @@ type Shell struct {
 	pages    []portslib.AdminPage
 	sidebar  []portslib.SidebarSection
 
-	templates *template.Template
+	// templates is keyed by page name (home, entity_list, entity_form). Each
+	// entry is its own *template.Template so the {{define "content"}} block
+	// in each page file does not collide with sibling pages — a single
+	// ParseFS over all files would let the last-parsed "content" win, which
+	// produced cross-page render failures.
+	templates map[string]*template.Template
 	static    http.Handler
 }
 
@@ -85,15 +91,27 @@ func NewShell(opts ShellOptions) *Shell {
 		title:    title,
 		basePath: basePath,
 	}
-	s.templates = template.Must(template.ParseFS(templatesFS,
-		"templates/layout.tmpl",
-		"templates/sidebar.tmpl",
-		"templates/home.tmpl",
-		"templates/entity_list.tmpl",
-		"templates/entity_form.tmpl",
-	))
+	s.templates = parsePageTemplates()
 	s.static = http.StripPrefix(basePath+"/static/", http.FileServer(http.FS(adminstatic.FS())))
 	return s
+}
+
+// parsePageTemplates parses each page template (home, entity_list,
+// entity_form) into its own *template.Template, together with the shared
+// layout and sidebar partials. Keeping pages in separate sets avoids the
+// "last define wins" trap when multiple files declare {{define "content"}}.
+func parsePageTemplates() map[string]*template.Template {
+	pages := []string{"home", "entity_list", "entity_form"}
+	out := make(map[string]*template.Template, len(pages))
+	for _, p := range pages {
+		t := template.Must(template.ParseFS(templatesFS,
+			"templates/layout.tmpl",
+			"templates/sidebar.tmpl",
+			"templates/"+p+".tmpl",
+		))
+		out[p] = t
+	}
+	return out
 }
 
 // Title returns the configured shell title.
@@ -348,11 +366,26 @@ func (s *Shell) renderEntityForm(w http.ResponseWriter, _ *http.Request, e Entit
 	s.render(w, "entity_form", data)
 }
 
+// render executes the named template into a buffer first so that template
+// errors never produce a partial write. ResponseWriter is touched only after
+// rendering succeeds (commit path) or as a single error path on the failure
+// branch — avoiding the "superfluous response.WriteHeader call" warning that
+// the previous in-place ExecuteTemplate + http.Error sequence produced when
+// the template engine had already auto-committed a 200 before failing.
 func (s *Shell) render(w http.ResponseWriter, name string, data any) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.ExecuteTemplate(w, name, data); err != nil {
-		http.Error(w, fmt.Sprintf("admin render: %v", err), http.StatusInternalServerError)
+	tmpl, ok := s.templates[name]
+	if !ok {
+		http.Error(w, fmt.Sprintf("admin render: unknown template %q", name), http.StatusInternalServerError)
+		return
 	}
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+		http.Error(w, fmt.Sprintf("admin render: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(buf.Bytes())
 }
 
 func (s *Shell) modulesSummary() []moduleSummary {

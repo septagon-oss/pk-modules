@@ -231,6 +231,77 @@ func TestCustomPagePrecedesEntity(t *testing.T) {
 	}
 }
 
+// countingResponseWriter records every WriteHeader call so the test can
+// assert that the Shell never double-commits the response (the symptom of
+// the "superfluous response.WriteHeader call" warning the buffer-first
+// render() fix addresses).
+type countingResponseWriter struct {
+	header        http.Header
+	body          []byte
+	statusWrites  []int
+	wroteImplicit bool
+}
+
+func newCountingResponseWriter() *countingResponseWriter {
+	return &countingResponseWriter{header: http.Header{}}
+}
+
+func (c *countingResponseWriter) Header() http.Header { return c.header }
+
+func (c *countingResponseWriter) WriteHeader(code int) {
+	c.statusWrites = append(c.statusWrites, code)
+}
+
+func (c *countingResponseWriter) Write(p []byte) (int, error) {
+	if len(c.statusWrites) == 0 {
+		// Mirror net/http.ResponseWriter semantics: a Write before
+		// WriteHeader implicitly commits 200.
+		c.statusWrites = append(c.statusWrites, http.StatusOK)
+		c.wroteImplicit = true
+	}
+	c.body = append(c.body, p...)
+	return len(p), nil
+}
+
+func TestRenderDoesNotDoubleWriteHeader(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	if err := m.Registrar().RegisterEntityCRUD("user_management", "User", "/api/v1/users"); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"home", "/admin"},
+		{"entity list", "/admin/user_management/User"},
+		{"entity form new", "/admin/user_management/User/new"},
+		{"entity form edit", "/admin/user_management/User/some-id"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			w := newCountingResponseWriter()
+			m.HTTPHandler().ServeHTTP(w, req)
+			if len(w.statusWrites) != 1 {
+				t.Fatalf("WriteHeader call count = %d (writes=%v); want exactly 1 (superfluous WriteHeader regression)",
+					len(w.statusWrites), w.statusWrites)
+			}
+			if w.wroteImplicit {
+				t.Fatalf("render() relied on the implicit 200 from Write — must call WriteHeader explicitly so it is auditable")
+			}
+			if w.statusWrites[0] != http.StatusOK {
+				t.Fatalf("status = %d, want 200", w.statusWrites[0])
+			}
+			if !strings.Contains(string(w.body), "Admin") && !strings.Contains(string(w.body), "User") {
+				t.Fatalf("body looks empty/wrong: %q", string(w.body))
+			}
+		})
+	}
+}
+
 func TestCompose(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
