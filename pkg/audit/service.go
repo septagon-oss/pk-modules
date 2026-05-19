@@ -9,6 +9,8 @@ package audit
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,7 +41,11 @@ func (s *service) Record(ctx context.Context, e *Event) error {
 		e.EmittedAt = time.Now().UTC()
 	}
 	if strings.TrimSpace(e.ID) == "" {
-		e.ID = generateID(e.EmittedAt, e.TenantID, e.Action)
+		id, err := generateID(e.EmittedAt, e.TenantID, e.Action)
+		if err != nil {
+			return err
+		}
+		e.ID = id
 	}
 	row := toStore(e)
 	if err := s.store.Append(ctx, row); err != nil {
@@ -110,11 +116,22 @@ func EmitterFor(svc AuditService, tenantID, actor, severity string) AuditEmitter
 	return &emitter{svc: svc, tenantID: tenantID, actor: actor, severity: severity}
 }
 
-// generateID synthesizes a deterministic-ish event ID without bringing in a
-// UUID dependency. The format is `<unix-nano>-<tenant>-<action>` truncated
-// for readability — Pro replaces this with ULID.
-func generateID(emittedAt time.Time, tenantID, action string) string {
-	return fmt.Sprintf("%d-%s-%s", emittedAt.UTC().UnixNano(), shorten(tenantID), shorten(action))
+// generateID synthesizes an event ID without bringing in a UUID dependency.
+// The format is `<unix-nano>-<tenant>-<action>-<8 hex chars from crypto/rand>`
+// truncated for readability. The random suffix guarantees uniqueness even when
+// two events emit in the same nanosecond from the same tenant + action — Pro
+// replaces this with ULID.
+func generateID(emittedAt time.Time, tenantID, action string) (string, error) {
+	var buf [4]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return "", fmt.Errorf("audit: generateID: %w", err)
+	}
+	return fmt.Sprintf("%d-%s-%s-%s",
+		emittedAt.UTC().UnixNano(),
+		shorten(tenantID),
+		shorten(action),
+		hex.EncodeToString(buf[:]),
+	), nil
 }
 
 func shorten(s string) string {

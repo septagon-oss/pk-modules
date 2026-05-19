@@ -186,6 +186,35 @@ func TestMultiRecordOrder(t *testing.T) {
 	}
 }
 
+func TestRecordIDsUniqueUnderContention(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	const n = 200
+	seen := make(map[string]struct{}, n)
+	// Pin EmittedAt so the only differentiator is the random suffix; this
+	// guarantees the test fails if generateID ever drops its random portion.
+	pinned := time.Now().UTC()
+	for i := 0; i < n; i++ {
+		e := &audit.Event{
+			TenantID:  "t-collision",
+			Actor:     "x",
+			Action:    "y",
+			EmittedAt: pinned,
+		}
+		if err := m.Service().Record(ctx, e); err != nil {
+			t.Fatalf("Record %d: %v", i, err)
+		}
+		if _, dup := seen[e.ID]; dup {
+			t.Fatalf("duplicate ID at %d: %q", i, e.ID)
+		}
+		seen[e.ID] = struct{}{}
+	}
+	if len(seen) != n {
+		t.Fatalf("len(seen) = %d, want %d", len(seen), n)
+	}
+}
+
 func TestAuditEmitterDelegates(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
