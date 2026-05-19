@@ -23,7 +23,7 @@ import (
 
 func TestNewModuleDefaults(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	if m.Service() == nil {
 		t.Fatalf("Service() is nil")
 	}
@@ -40,7 +40,7 @@ func TestNewModuleDefaults(t *testing.T) {
 
 func TestRegisterCheck(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	ok := corehealth.CheckerFunc(func(context.Context) error { return nil })
 	if err := m.Registrar().Register("storage", ok); err != nil {
 		t.Fatalf("Register: %v", err)
@@ -59,7 +59,7 @@ func TestRegisterCheck(t *testing.T) {
 
 func TestRegisterRejectsEmptyName(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	ok := corehealth.CheckerFunc(func(context.Context) error { return nil })
 	if err := m.Registrar().Register("", ok); err == nil {
 		t.Fatalf("Register with empty name should error")
@@ -68,7 +68,7 @@ func TestRegisterRejectsEmptyName(t *testing.T) {
 
 func TestRegisterRejectsNilChecker(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	if err := m.Registrar().Register("storage", nil); err == nil {
 		t.Fatalf("Register with nil checker should error")
 	}
@@ -76,7 +76,7 @@ func TestRegisterRejectsNilChecker(t *testing.T) {
 
 func TestCheckAggregatesHealthy(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	for _, name := range []string{"db", "cache", "queue"} {
 		_ = m.Registrar().Register(name, corehealth.CheckerFunc(func(context.Context) error { return nil }))
 	}
@@ -91,7 +91,7 @@ func TestCheckAggregatesHealthy(t *testing.T) {
 
 func TestCheckAggregatesUnhealthyOnFailure(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	_ = m.Registrar().Register("ok", corehealth.CheckerFunc(func(context.Context) error { return nil }))
 	_ = m.Registrar().Register("bad", corehealth.CheckerFunc(func(context.Context) error { return errors.New("disk full") }))
 	res := m.Service().Check(context.Background())
@@ -102,7 +102,7 @@ func TestCheckAggregatesUnhealthyOnFailure(t *testing.T) {
 
 func TestHTTPHandlerReturns200WhenHealthy(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	_ = m.Registrar().Register("ok", corehealth.CheckerFunc(func(context.Context) error { return nil }))
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -122,7 +122,7 @@ func TestHTTPHandlerReturns200WhenHealthy(t *testing.T) {
 
 func TestHTTPHandlerReturns503WhenUnhealthy(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	_ = m.Registrar().Register("bad", corehealth.CheckerFunc(func(context.Context) error { return errors.New("broken") }))
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -135,7 +135,7 @@ func TestHTTPHandlerReturns503WhenUnhealthy(t *testing.T) {
 
 func TestComposeReturnsValidComposable(t *testing.T) {
 	t.Parallel()
-	m := health.NewModule()
+	m := health.MustNewModule()
 	c := m.Compose()
 	if c == nil {
 		t.Fatalf("Compose() returned nil")

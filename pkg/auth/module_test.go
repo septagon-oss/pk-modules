@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -159,6 +160,17 @@ func TestNewModuleRequiresSessionStore(t *testing.T) {
 	_, err := auth.NewModule(auth.WithUserReader(newFakeUserReader()))
 	if err == nil {
 		t.Fatalf("NewModule() with no session store should error")
+	}
+}
+
+func TestNewModuleRequiresUserReader(t *testing.T) {
+	t.Parallel()
+	_, err := auth.NewModule(auth.WithSQLiteDSN(sqliteDSN(t)))
+	if err == nil {
+		t.Fatalf("NewModule() with no user reader should error")
+	}
+	if !strings.Contains(err.Error(), "user reader") {
+		t.Fatalf("err = %v, want it to mention 'user reader'", err)
 	}
 }
 

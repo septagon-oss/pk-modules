@@ -12,6 +12,8 @@ package health
 // Convention: C-14 (every Go file declares its purpose).
 
 import (
+	"fmt"
+
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
 	"github.com/septagon-oss/pk-core/pkg/observability/health"
 
@@ -37,10 +39,11 @@ type Module struct {
 	admin     portslib.AdminRegistrar
 }
 
-// NewModule constructs a health module. Unlike user/audit, this module
-// performs no I/O at construction time so it returns just *Module — there is
-// no error path. MustNewModule is provided for parity with sibling modules.
-func NewModule(opts ...Option) *Module {
+// NewModule constructs a health module. Returns an error for parity with
+// sibling modules (user/audit/auth) — admin registration can fail when a
+// real admin shell rejects a duplicate registration, and silently swallowing
+// that previously masked configuration mistakes.
+func NewModule(opts ...Option) (*Module, error) {
 	cfg := config{}
 	for _, opt := range opts {
 		if opt != nil {
@@ -68,19 +71,22 @@ func NewModule(opts ...Option) *Module {
 	m.registrar = &registrarAdapter{registry: cfg.registry}
 	m.handler = NewHandler(cfg.registry.HTTPHandler())
 
-	// Admin registration cannot fail in a way callers should bubble through
-	// NewModule's signature, but log-equivalent behavior is preserved by the
-	// admin registrar's error returns: in tests, the noop accepts everything;
-	// production admin shells observe their own constraints.
-	_ = registerAdmin(cfg.admin, m.svc)
+	if err := registerAdmin(cfg.admin, m.svc); err != nil {
+		return nil, fmt.Errorf("health: register admin: %w", err)
+	}
 
-	return m
+	return m, nil
 }
 
 // MustNewModule mirrors the panic-on-error variant used by user/audit. It is
-// defined for parity even though NewModule cannot currently fail.
+// the preferred entry point for catalog literals that cannot accept an error
+// return.
 func MustNewModule(opts ...Option) *Module {
-	return NewModule(opts...)
+	m, err := NewModule(opts...)
+	if err != nil {
+		panic(err)
+	}
+	return m
 }
 
 // Compose returns the module.Composable representation that the catalog

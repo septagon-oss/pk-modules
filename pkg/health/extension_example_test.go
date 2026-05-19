@@ -25,7 +25,7 @@ type ProModule struct {
 
 // NewProModule wires the OSS module and adds Pro-only state.
 func NewProModule(opts ...health.Option) *ProModule {
-	return &ProModule{Module: health.NewModule(opts...), SLOEnabled: true}
+	return &ProModule{Module: health.MustNewModule(opts...), SLOEnabled: true}
 }
 
 func TestProEmbeddingCompiles(t *testing.T) {

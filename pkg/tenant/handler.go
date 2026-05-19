@@ -35,6 +35,14 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 // ServeHTTP dispatches to the appropriate handler method.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, APIPath), "/")
+	// Reject IDs that still contain a slash — those are nested paths the
+	// handler does not own. Without this guard a request like
+	// /api/v1/tenants/a/b would resolve to id="a/b" and be served as a
+	// per-row lookup that can never succeed.
+	if strings.Contains(id, "/") {
+		http.NotFound(w, r)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		if id == "" {

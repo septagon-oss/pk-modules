@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -162,6 +164,17 @@ func TestCreateSkipsTenantValidationWhenNoService(t *testing.T) {
 	m := newModule(t)
 	if err := m.Service().Create(context.Background(), makeUser("t-anything", "alice")); err != nil {
 		t.Fatalf("Create without tenant service: %v", err)
+	}
+}
+
+func TestHandlerRejectsIDWithSlash(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/a/b", nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

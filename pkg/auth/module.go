@@ -90,6 +90,12 @@ func NewModule(opts ...Option) (*Module, error) {
 		}
 		cfg.hasher = bh
 	}
+	// Reject nil UserReader at construction. The previous behavior was to
+	// surface the failure on first Login, which produced a confusing
+	// runtime error for callers that simply forgot to wire WithUserReader.
+	if cfg.users == nil {
+		return nil, errors.New("auth: no user reader configured — wire one via WithUserReader")
+	}
 
 	sessions, err := resolveSessionStore(cfg)
 	if err != nil {

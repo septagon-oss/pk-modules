@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -50,6 +52,20 @@ func TestNewModuleDefaults(t *testing.T) {
 	}
 	if m.Store() == nil {
 		t.Fatalf("Store() is nil")
+	}
+	if m.ContextProvider() == nil {
+		t.Fatalf("ContextProvider() is nil — module.go must assign the default contextProvider explicitly")
+	}
+}
+
+func TestHandlerRejectsIDWithSlash(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/a/b", nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

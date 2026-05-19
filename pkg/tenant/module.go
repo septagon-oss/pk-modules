@@ -77,9 +77,10 @@ func NewModule(opts ...Option) (*Module, error) {
 			Description: ModuleDescription,
 			Version:     ModuleVersion,
 		},
-		store:  st,
-		admin:  cfg.admin,
-		health: cfg.health,
+		store:    st,
+		provider: contextProvider{},
+		admin:    cfg.admin,
+		health:   cfg.health,
 	}
 	m.svc = newService(st)
 	m.handler = NewHandler(m.svc)
