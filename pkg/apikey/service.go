@@ -20,6 +20,7 @@ import (
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
 
 	"github.com/septagon-oss/pk-modules/pkg/apikey/store"
+	"github.com/septagon-oss/pk-modules/pkg/audit"
 )
 
 // Sentinel errors returned by APIKeyService. Verify-side errors are
@@ -34,11 +35,12 @@ var (
 type service struct {
 	store  store.Store
 	hasher passhash.Hasher
+	audit  audit.AuditEmitter
 	now    func() time.Time
 }
 
-func newService(s store.Store, h passhash.Hasher) *service {
-	return &service{store: s, hasher: h, now: time.Now}
+func newService(s store.Store, h passhash.Hasher, emitter audit.AuditEmitter) *service {
+	return &service{store: s, hasher: h, audit: emitter, now: time.Now}
 }
 
 // Issue generates a new API key and persists its hash. The returned
@@ -111,6 +113,16 @@ func (s *service) Issue(
 	}
 	out := fromStore(row)
 	out.Scopes = scopesCopy
+	// Audit emission is best-effort: a transport failure must not roll back the
+	// issued key (which is already persisted) or hide it from the caller.
+	if s.audit != nil {
+		_ = s.audit.Emit(ctx, "apikey.issued", "apikey:"+id, map[string]any{
+			"tenant_id": tenantID,
+			"user_id":   userID,
+			"name":      name,
+			"prefix":    prefix,
+		})
+	}
 	return plaintext, out, nil
 }
 
@@ -155,7 +167,24 @@ func (s *service) Revoke(ctx context.Context, id string) error {
 	if strings.TrimSpace(id) == "" {
 		return errors.New("apikey: id is required")
 	}
-	return s.store.Revoke(ctx, id)
+	// Lookup the key first so the audit event can carry the tenant; failure
+	// here must not block the actual revoke from running.
+	var tenantID string
+	if s.audit != nil {
+		if row, err := s.store.Get(ctx, id); err == nil && row != nil {
+			tenantID = row.TenantID
+		}
+	}
+	if err := s.store.Revoke(ctx, id); err != nil {
+		return err
+	}
+	if s.audit != nil {
+		_ = s.audit.Emit(ctx, "apikey.revoked", "apikey:"+id, map[string]any{
+			"id":        id,
+			"tenant_id": tenantID,
+		})
+	}
+	return nil
 }
 
 // List returns every key for the tenant.

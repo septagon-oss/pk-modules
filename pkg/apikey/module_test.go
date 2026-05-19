@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +27,41 @@ import (
 
 	_ "modernc.org/sqlite"
 )
+
+// fakeAuditEmitter is a test double that records every Emit call. It
+// satisfies audit.AuditEmitter without importing the real audit module's
+// store-backed implementation.
+type fakeAuditEmitter struct {
+	mu    sync.Mutex
+	calls []auditCall
+}
+
+type auditCall struct {
+	Action   string
+	Resource string
+	Details  map[string]any
+}
+
+func (f *fakeAuditEmitter) Emit(_ context.Context, action, resource string, details map[string]any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	// Copy details so subsequent mutations by the service don't race with
+	// the assertion reads.
+	cp := make(map[string]any, len(details))
+	for k, v := range details {
+		cp[k] = v
+	}
+	f.calls = append(f.calls, auditCall{Action: action, Resource: resource, Details: cp})
+	return nil
+}
+
+func (f *fakeAuditEmitter) Calls() []auditCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]auditCall, len(f.calls))
+	copy(out, f.calls)
+	return out
+}
 
 func sqliteDSN(t *testing.T) string {
 	t.Helper()
@@ -323,6 +359,85 @@ func TestAuthenticatorRejectsInvalidBearer(t *testing.T) {
 	server.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("middleware status = %d, want 401", rec.Code)
+	}
+}
+
+func TestIssueEmitsAuditEvent(t *testing.T) {
+	t.Parallel()
+	emitter := &fakeAuditEmitter{}
+	m := newModule(t, apikey.WithAuditEmitter(emitter))
+	ctx := context.Background()
+	_, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", []string{"read"}, 0)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	calls := emitter.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("emitter calls = %d, want 1: %+v", len(calls), calls)
+	}
+	c := calls[0]
+	if c.Action != "apikey.issued" {
+		t.Fatalf("action = %q, want apikey.issued", c.Action)
+	}
+	if c.Resource != "apikey:"+issued.ID {
+		t.Fatalf("resource = %q, want apikey:%s", c.Resource, issued.ID)
+	}
+	if c.Details["tenant_id"] != "t-1" {
+		t.Fatalf("details.tenant_id = %v, want t-1", c.Details["tenant_id"])
+	}
+	if c.Details["user_id"] != "u-1" {
+		t.Fatalf("details.user_id = %v, want u-1", c.Details["user_id"])
+	}
+	if c.Details["name"] != "ci-bot" {
+		t.Fatalf("details.name = %v, want ci-bot", c.Details["name"])
+	}
+	if c.Details["prefix"] != issued.Prefix {
+		t.Fatalf("details.prefix = %v, want %q", c.Details["prefix"], issued.Prefix)
+	}
+}
+
+func TestRevokeEmitsAuditEvent(t *testing.T) {
+	t.Parallel()
+	emitter := &fakeAuditEmitter{}
+	m := newModule(t, apikey.WithAuditEmitter(emitter))
+	ctx := context.Background()
+	_, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", nil, 0)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if err := m.Service().Revoke(ctx, issued.ID); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+	calls := emitter.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("emitter calls = %d, want 2: %+v", len(calls), calls)
+	}
+	c := calls[1]
+	if c.Action != "apikey.revoked" {
+		t.Fatalf("action = %q, want apikey.revoked", c.Action)
+	}
+	if c.Resource != "apikey:"+issued.ID {
+		t.Fatalf("resource = %q, want apikey:%s", c.Resource, issued.ID)
+	}
+	if c.Details["id"] != issued.ID {
+		t.Fatalf("details.id = %v, want %q", c.Details["id"], issued.ID)
+	}
+	if c.Details["tenant_id"] != "t-1" {
+		t.Fatalf("details.tenant_id = %v, want t-1", c.Details["tenant_id"])
+	}
+}
+
+func TestNilAuditEmitterIsAllowed(t *testing.T) {
+	t.Parallel()
+	// No WithAuditEmitter — the service must not panic on Issue/Revoke.
+	m := newModule(t)
+	ctx := context.Background()
+	_, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", nil, 0)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if err := m.Service().Revoke(ctx, issued.ID); err != nil {
+		t.Fatalf("Revoke: %v", err)
 	}
 }
 

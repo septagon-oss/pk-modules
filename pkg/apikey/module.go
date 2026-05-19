@@ -101,7 +101,7 @@ func NewModule(opts ...Option) (*Module, error) {
 		admin:  cfg.admin,
 		health: cfg.health,
 	}
-	m.svc = newService(st, cfg.hasher)
+	m.svc = newService(st, cfg.hasher, cfg.audit)
 	m.handler = NewHandler(m.svc)
 	m.authn = newAuthenticator(m.svc)
 
