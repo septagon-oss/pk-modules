@@ -1,0 +1,10 @@
+.git
+.github
+.agents
+.codex
+.generated
+.platformkit
+.tmp*
+coverage.out
+*.test
+*.log
