@@ -118,13 +118,9 @@ func TestDictRejectsInvalidPairs(t *testing.T) {
 }
 
 func TestRenderFragment_SeptagonEditorialFixture(t *testing.T) {
-	// Resolve the Septagon template path relative to this test's working
-	// directory. The pk-modules repo lives at
-	// septagon-oss-workspace/pk-modules; the template lives at
-	// septagon-clients/septagon/apps/complete-saas/site/homepage.template.html.
-	tmplPath := filepath.Join("..", "..", "..", "..", "..", "septagon-clients", "septagon", "apps", "complete-saas", "site", "homepage.template.html")
-	if envPath := os.Getenv("SEPTAGON_OVERLAY_TEMPLATE"); envPath != "" {
-		tmplPath = envPath
+	tmplPath := os.Getenv("SEPTAGON_OVERLAY_TEMPLATE")
+	if tmplPath == "" {
+		t.Skip("set SEPTAGON_OVERLAY_TEMPLATE to run the private Septagon overlay fixture")
 	}
 	tmpl, err := os.ReadFile(tmplPath)
 	if err != nil {
