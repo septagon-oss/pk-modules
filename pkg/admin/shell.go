@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -414,10 +413,4 @@ func (s *Shell) modulesSummary() []moduleSummary {
 		out = append(out, *byID[id])
 	}
 	return out
-}
-
-// joinBase is a small helper for tests that need to construct URLs against
-// the shell's base path without re-implementing the trim-and-join rules.
-func (s *Shell) joinBase(elem ...string) string {
-	return path.Join(append([]string{s.basePath}, elem...)...)
 }

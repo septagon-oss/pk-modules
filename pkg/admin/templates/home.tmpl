@@ -11,7 +11,7 @@
   {{end}}
   {{if .Pages}}
   <p class="pk-muted" style="margin:0 0 4px">Pages</p>
-  <ul>{{range .Pages}}<li><a href="{{$.BasePath}}{{.Path}}">{{.Title}}</a></li>{{end}}</ul>
+  <ul>{{range .Pages}}<li><a href="{{.Path}}">{{.Title}}</a></li>{{end}}</ul>
   {{end}}
 </div>
 {{else}}

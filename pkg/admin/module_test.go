@@ -302,6 +302,96 @@ func TestRenderDoesNotDoubleWriteHeader(t *testing.T) {
 	}
 }
 
+// TestSidebarLinkResolvesToRegisteredRoute is the regression guard for the
+// "/admin/admin/tenants" papercut: the sidebar template (and the home
+// dashboard's Pages list) used to prepend the base path to each link's
+// already-absolute Path, producing a doubled prefix that 404s. This test
+// registers a sidebar item alongside the custom page it points at, renders the
+// home dashboard, extracts the hrefs the templates actually emitted for BOTH
+// the sidebar item and the home Pages entry, and then GETs each exact href
+// back through the shell — asserting they resolve (200) rather than 404. If a
+// renderer ever re-doubles the prefix, the extracted href becomes
+// "/admin/admin/tenants" and the follow-up GET 404s, failing this test.
+func TestSidebarLinkResolvesToRegisteredRoute(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+
+	const itemPath = "/admin/tenants"
+	if err := m.Registrar().RegisterPage(portslib.AdminPage{
+		ModuleID: "tenant_management",
+		Path:     itemPath,
+		Title:    "Tenants Page",
+		Render: func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("tenant page"))
+		},
+	}); err != nil {
+		t.Fatalf("register page: %v", err)
+	}
+	if err := m.Registrar().RegisterSidebarSection(portslib.SidebarSection{
+		ModuleID: "tenant_management",
+		Label:    "Tenants",
+		Order:    10,
+		Items:    []portslib.SidebarItem{{Path: itemPath, Label: "All tenants"}},
+	}); err != nil {
+		t.Fatalf("register sidebar: %v", err)
+	}
+
+	// Render the home dashboard and pull the hrefs the templates actually
+	// emitted for the sidebar item and the home Pages entry.
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("home status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+
+	for _, tc := range []struct{ where, label string }{
+		{"sidebar item", "All tenants"},
+		{"home Pages entry", "Tenants Page"},
+	} {
+		href := extractHref(t, body, tc.label)
+		if href != itemPath {
+			t.Fatalf("%s href = %q, want %q (base path must not be doubled)", tc.where, href, itemPath)
+		}
+		// The emitted href must resolve to a real route, not a 404.
+		linkReq := httptest.NewRequest(http.MethodGet, href, nil)
+		linkRec := httptest.NewRecorder()
+		m.HTTPHandler().ServeHTTP(linkRec, linkReq)
+		if linkRec.Code != http.StatusOK {
+			t.Fatalf("GET %s href %q: status = %d, want 200", tc.where, href, linkRec.Code)
+		}
+	}
+}
+
+// extractHref returns the href value of the first <a> tag whose link text
+// contains label. It is a deliberately small parser scoped to the admin
+// sidebar markup the shell renders.
+func extractHref(t *testing.T, body, label string) string {
+	t.Helper()
+	anchor := strings.Index(body, ">"+label+"<")
+	if anchor == -1 {
+		t.Fatalf("link text %q not found in body:\n%s", label, body)
+	}
+	open := strings.LastIndex(body[:anchor], "<a ")
+	if open == -1 {
+		t.Fatalf("no <a> tag before link text %q", label)
+	}
+	tag := body[open:anchor]
+	const marker = `href="`
+	hi := strings.Index(tag, marker)
+	if hi == -1 {
+		t.Fatalf("no href in anchor for %q: %q", label, tag)
+	}
+	rest := tag[hi+len(marker):]
+	end := strings.IndexByte(rest, '"')
+	if end == -1 {
+		t.Fatalf("unterminated href in anchor for %q: %q", label, tag)
+	}
+	return rest[:end]
+}
+
 func TestCompose(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)

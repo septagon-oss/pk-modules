@@ -18,6 +18,11 @@ import (
 )
 
 // AdminPage describes a custom page registered into the admin shell.
+//
+// Path is an absolute URL path that must already include the admin base path
+// (e.g. "/admin/tenants"). The shell matches it verbatim against the full
+// request URL and renders it verbatim as a link href, so it must not be a
+// base-path-relative fragment.
 type AdminPage struct {
 	ModuleID string
 	Path     string
@@ -34,6 +39,13 @@ type SidebarSection struct {
 }
 
 // SidebarItem is a single entry inside a SidebarSection.
+//
+// Path is an absolute URL path that must already include the admin base path
+// (e.g. "/admin/tenants") — it is rendered verbatim as the link href so the
+// link resolves to a route the shell actually serves. Do not pass a base-path-
+// relative fragment: the renderer does not prepend the base path. This keeps a
+// sidebar item and its target route (a registered AdminPage or entity route)
+// in lockstep.
 type SidebarItem struct {
 	Path  string
 	Label string
