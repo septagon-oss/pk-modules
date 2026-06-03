@@ -144,6 +144,12 @@ func resolveSessionStore(cfg config) (SessionStore, error) {
 	switch {
 	case cfg.sessions != nil:
 		return cfg.sessions, nil
+	case cfg.sqliteDB != nil:
+		st, err := sqlitestore.New(cfg.sqliteDB)
+		if err != nil {
+			return nil, fmt.Errorf("auth: build sqlite session store from shared *sql.DB: %w", err)
+		}
+		return newStoreAdapter(st), nil
 	case cfg.sqliteDSN != "":
 		st, err := sqlitestore.Open(cfg.sqliteDriver, cfg.sqliteDSN)
 		if err != nil {
@@ -151,7 +157,7 @@ func resolveSessionStore(cfg config) (SessionStore, error) {
 		}
 		return newStoreAdapter(st), nil
 	default:
-		return nil, errors.New("auth: no session store configured — use WithSessionStore or WithSQLiteDSN")
+		return nil, errors.New("auth: no session store configured — use WithSessionStore, WithSQLiteDB, or WithSQLiteDSN")
 	}
 }
 

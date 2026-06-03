@@ -7,6 +7,7 @@ package auth
 // Convention: C-14 (every Go file declares its purpose).
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
@@ -28,6 +29,7 @@ type config struct {
 	admin        portslib.AdminRegistrar
 	health       portslib.HealthRegistrar
 	sessionTTL   time.Duration
+	sqliteDB     *sql.DB
 	sqliteDSN    string
 	sqliteDriver string
 }
@@ -77,6 +79,17 @@ func WithAdminRegistrar(r portslib.AdminRegistrar) Option {
 // WithHealthRegistrar wires the host application's health registrar.
 func WithHealthRegistrar(r portslib.HealthRegistrar) Option {
 	return func(c *config) { c.health = r }
+}
+
+// WithSQLiteDB wires the default sqlite session store on top of a caller-owned
+// *sql.DB. Use this when several modules must share one connection pool over a
+// single SQLite file — the host opens one *sql.DB (typically with
+// SetMaxOpenConns(1)) and hands the same handle to every module so they cannot
+// race each other's schema creation or fan out into independent pools. The
+// caller retains ownership of the *sql.DB lifecycle (Close). It wins over
+// WithSQLiteDSN but loses to an explicit WithSessionStore.
+func WithSQLiteDB(db *sql.DB) Option {
+	return func(c *config) { c.sqliteDB = db }
 }
 
 // WithSQLiteDSN selects the default sqlite store using the caller-registered
