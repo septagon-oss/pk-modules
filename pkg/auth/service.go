@@ -31,6 +31,12 @@ var (
 	ErrNoCredentials      = errors.New("auth: credentials require email or username")
 	ErrUserInactive       = errors.New("auth: user is inactive")
 	ErrPolicyDenied       = errors.New("auth: login policy denied")
+	// ErrInvalidRequest marks a malformed login request the caller must fix
+	// (missing tenant_id, missing identifier, or missing password). Handlers
+	// map it to HTTP 400. It is distinct from ErrInvalidCredentials so that a
+	// well-formed-but-wrong attempt (401) is never confused with a malformed
+	// request, and so neither path leaks whether a user exists.
+	ErrInvalidRequest = errors.New("auth: invalid request")
 )
 
 // service is the default AuthService implementation.
@@ -72,15 +78,14 @@ func newService(
 func (s *service) Login(ctx context.Context, tenantID string, creds Credentials) (*Session, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	if tenantID == "" {
-		return nil, errors.New("auth: tenant_id is required")
+		return nil, fmt.Errorf("%w: tenant_id is required", ErrInvalidRequest)
 	}
 	identifier := creds.Identifier()
 	if identifier == "" {
-		return nil, ErrNoCredentials
+		return nil, fmt.Errorf("%w: email or username is required", ErrInvalidRequest)
 	}
 	if creds.Password == "" {
-		s.emitFailure(ctx, tenantID, identifier, "missing_password")
-		return nil, ErrInvalidCredentials
+		return nil, fmt.Errorf("%w: password is required", ErrInvalidRequest)
 	}
 	if err := s.policy.AllowLogin(ctx, tenantID, identifier); err != nil {
 		s.emitFailure(ctx, tenantID, identifier, "policy_denied")

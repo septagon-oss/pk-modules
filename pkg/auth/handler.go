@@ -79,15 +79,22 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		status := http.StatusInternalServerError
+		msg := "internal error"
 		switch {
-		case errors.Is(err, ErrInvalidCredentials), errors.Is(err, ErrNoCredentials):
+		case errors.Is(err, ErrInvalidRequest), errors.Is(err, ErrNoCredentials):
+			status = http.StatusBadRequest
+			msg = err.Error()
+		case errors.Is(err, ErrInvalidCredentials):
 			status = http.StatusUnauthorized
+			msg = err.Error()
 		case errors.Is(err, ErrUserInactive):
 			status = http.StatusForbidden
+			msg = err.Error()
 		case errors.Is(err, ErrPolicyDenied):
 			status = http.StatusTooManyRequests
+			msg = err.Error()
 		}
-		http.Error(w, err.Error(), status)
+		http.Error(w, msg, status)
 		return
 	}
 	writeJSON(w, http.StatusCreated, sess)
