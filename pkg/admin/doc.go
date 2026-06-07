@@ -31,9 +31,10 @@
 //     WithAdminRegistrar options.
 //
 //   - Replacement: ANY value satisfying portslib.AdminRegistrar can replace
-//     this admin shell. A Pro Vue/React admin replaces this module by
-//     constructing its own registrar and skipping admin_management in the
-//     module catalog — the OSS surface is intentionally swappable.
+//     this admin shell. Pro extends (not replaces) by wiring this OSS module
+//     via ossbridge while serving production /admin through admin_management's
+//     gomponents + HTMX renderer (ADR-0000). A third-party registrar can skip
+//     this module in the catalog — the OSS surface is intentionally swappable.
 //
 //   - Extension: pk-pro embeds *Module to add Pro-only fields/methods and
 //     can override the shell title, attach a richer rendering pipeline, or
