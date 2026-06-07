@@ -33,7 +33,7 @@ const (
 	SeverityCritical = "critical"
 )
 
-// Default channel name for the built-in in-app channel.
+// ChannelInApp is the default channel name for the built-in in-app channel.
 const ChannelInApp = "in_app"
 
 // EntityName is the stable display name of the Notification entity.

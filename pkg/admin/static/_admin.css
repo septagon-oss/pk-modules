@@ -1,6 +1,6 @@
 /* _admin.css — minimal hand-written stylesheet for the OSS admin shell.
  *
- * v0.0.0 ships a hand-tuned ~100-line CSS so the admin remains self-contained
+ * v0.1.0 ships a hand-tuned ~100-line CSS so the admin remains self-contained
  * and renderable in a browser without an external build step. v0.0.1 will
  * generate this file from pk-design tokens so OSS and Pro stay visually in
  * sync.

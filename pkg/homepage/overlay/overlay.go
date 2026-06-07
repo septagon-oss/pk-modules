@@ -15,11 +15,28 @@ import (
 	"net/url"
 	"path"
 	"reflect"
+	"regexp"
 	"strings"
 )
 
+// safeClientSlug matches a single safe path segment used in asset URLs: letters,
+// digits, hyphen, and underscore only. It rejects ".", "..", path separators,
+// and percent-encoded traversal so a slug can never escape PublicAssetBasePath.
+var safeClientSlug = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// looksProtocolRelative reports whether a link would be treated by a browser as
+// protocol-relative (and therefore external). Browsers normalize backslashes to
+// forward slashes, so "/\\host", "\\\\host", and "//host" are all equivalent.
+func looksProtocolRelative(link string) bool {
+	return strings.HasPrefix(strings.ReplaceAll(link, `\`, "/"), "//")
+}
+
+// PublicAssetBasePath is the URL path prefix under which client overlay assets
+// are served.
 const PublicAssetBasePath = "/assets/overlays"
 
+// RenderInput holds the template source, view data, asset base path, and extra
+// template functions consumed by RenderFragment.
 type RenderInput struct {
 	TemplateSource string
 	View           any
@@ -27,6 +44,8 @@ type RenderInput struct {
 	Funcs          template.FuncMap
 }
 
+// RenderFragment parses and executes the overlay homepage template in input and
+// returns the rendered HTML fragment.
 func RenderFragment(input RenderInput) (string, error) {
 	tmpl, err := template.New("overlay-homepage").Funcs(FuncMap(input.AssetBase, input.Funcs)).Parse(input.TemplateSource)
 	if err != nil {
@@ -40,11 +59,20 @@ func RenderFragment(input RenderInput) (string, error) {
 	return buf.String(), nil
 }
 
+// FuncMap returns the template.FuncMap of overlay rendering helpers (asset,
+// link, external, mailto, tel, price, nonEmpty, dict, and arithmetic helpers),
+// merged with any non-empty, non-nil functions from extra.
 func FuncMap(assetBase string, extra template.FuncMap) template.FuncMap {
 	funcs := template.FuncMap{
 		"asset": func(assetPath string) string {
 			assetPath = strings.TrimSpace(assetPath)
 			if assetPath == "" {
+				return ""
+			}
+			// Reject protocol-relative URLs ("//host/x", and backslash variants
+			// like "/\\host" that browsers normalize) so they cannot smuggle in
+			// an external origin disguised as a local, root-relative asset.
+			if looksProtocolRelative(assetPath) {
 				return ""
 			}
 			if strings.HasPrefix(assetPath, "/") || strings.HasPrefix(assetPath, "http://") || strings.HasPrefix(assetPath, "https://") {
@@ -72,18 +100,32 @@ func FuncMap(assetBase string, extra template.FuncMap) template.FuncMap {
 	return funcs
 }
 
+// NormalizePublicLink rewrites an internal link to its locale-stripped public
+// form. Absolute http(s) links are returned unchanged; any other scheme
+// (including javascript: and data:), protocol-relative links ("//host/x" and
+// backslash variants browsers treat the same), and unparseable links are
+// rejected with an empty string. Use Mailto and Tel for mail and phone links.
 func NormalizePublicLink(link string) string {
 	link = strings.TrimSpace(link)
 	if link == "" {
 		return ""
 	}
+	// Reject anything a browser would resolve to an external origin before
+	// url.Parse (which does not fold backslashes) can be fooled.
+	if looksProtocolRelative(link) {
+		return ""
+	}
 
 	parsed, err := url.Parse(link)
 	if err != nil {
-		return link
+		return ""
 	}
-	if parsed.Host != "" || parsed.Scheme != "" {
-		return link
+	if parsed.Scheme != "" || parsed.Host != "" {
+		// Absolute or scheme-qualified: only allow http(s).
+		if parsed.Scheme == "http" || parsed.Scheme == "https" {
+			return link
+		}
+		return ""
 	}
 
 	pathValue := parsed.Path
@@ -105,6 +147,8 @@ func NormalizePublicLink(link string) string {
 	return parsed.String()
 }
 
+// ExternalURL validates and normalizes raw as an http(s) URL, returning an
+// empty string when it is not a valid external URL.
 func ExternalURL(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -126,6 +170,8 @@ func ExternalURL(raw string) string {
 	return parsed.String()
 }
 
+// Mailto returns a mailto: URL for a valid email address, or an empty string
+// when email is empty or invalid.
 func Mailto(email string) string {
 	email = strings.TrimSpace(email)
 	if email == "" {
@@ -140,6 +186,8 @@ func Mailto(email string) string {
 	return (&url.URL{Scheme: "mailto", Opaque: email}).String()
 }
 
+// Tel returns a tel: URL for a valid phone number, or an empty string when
+// phone is empty or invalid.
 func Tel(phone string) string {
 	phone = strings.TrimSpace(phone)
 	if phone == "" {
@@ -176,6 +224,8 @@ func normalizeTelephone(phone string) (string, bool) {
 	return b.String(), true
 }
 
+// PlanPrice formats a plan's MonthlyPrice field as a price string, returning
+// "Custom" when no positive price is set.
 func PlanPrice(plan any) string {
 	price := intField(plan, "MonthlyPrice")
 	if price <= 0 {
@@ -207,6 +257,8 @@ func intField(value any, name string) int64 {
 	}
 }
 
+// NonEmpty returns the first non-blank value (trimmed), or an empty string when
+// all values are blank.
 func NonEmpty(values ...string) string {
 	for _, value := range values {
 		if trimmed := strings.TrimSpace(value); trimmed != "" {
@@ -216,6 +268,8 @@ func NonEmpty(values ...string) string {
 	return ""
 }
 
+// Dict builds a map from alternating key/value arguments. It returns an error
+// if the argument count is odd or any key is not a non-empty string.
 func Dict(values ...any) (map[string]any, error) {
 	if len(values)%2 != 0 {
 		return nil, fmt.Errorf("dict expects key/value pairs")
@@ -232,15 +286,27 @@ func Dict(values ...any) (map[string]any, error) {
 	return out, nil
 }
 
+// PublicAssetURL returns the public URL for a client overlay asset, or an empty
+// string when the slug or relative path is empty or unsafe. The slug must be a
+// single safe segment matching safeClientSlug (letters, digits, hyphen,
+// underscore). The relative path is path-cleaned and rejected if it still
+// contains a percent sign or a backslash, so none of literal ("../"),
+// percent-encoded ("%2e%2e", "%2f"), or backslash ("..\\") traversal can escape
+// PublicAssetBasePath once a browser or server decodes the resulting URL.
+// (path.Clean treats only "/" as a separator and browsers fold "\\" to "/", so
+// a backslash segment would otherwise survive cleaning.)
 func PublicAssetURL(clientSlug, relativePath string) string {
-	clientSlug = strings.Trim(strings.TrimSpace(clientSlug), "/")
+	clientSlug = strings.TrimSpace(clientSlug)
 	relativePath, _ = strings.CutPrefix(path.Clean("/"+strings.TrimSpace(relativePath)), "/")
-	if clientSlug == "" || relativePath == "." || relativePath == "" {
+	if !safeClientSlug.MatchString(clientSlug) || relativePath == "." || relativePath == "" ||
+		strings.Contains(relativePath, "%") || strings.Contains(relativePath, `\`) {
 		return ""
 	}
 	return path.Join(PublicAssetBasePath, clientSlug, relativePath)
 }
 
+// BodyClass builds the overlay homepage <body> class list for the given client
+// slug, theme, and experience.
 func BodyClass(clientSlug, theme, experience string) string {
 	classes := []string{
 		"overlay-homepage-body",
@@ -255,6 +321,7 @@ func BodyClass(clientSlug, theme, experience string) string {
 	return JoinClassNames(classes...)
 }
 
+// ClassToken normalizes value into a lowercase, dash-separated CSS class token.
 func ClassToken(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	var out strings.Builder
@@ -273,6 +340,8 @@ func ClassToken(value string) string {
 	return strings.Trim(out.String(), "-")
 }
 
+// JoinClassNames joins non-blank, trimmed class names into a single
+// space-separated string.
 func JoinClassNames(values ...string) string {
 	classes := make([]string, 0, len(values))
 	for _, value := range values {

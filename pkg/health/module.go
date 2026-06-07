@@ -81,6 +81,9 @@ func NewModule(opts ...Option) (*Module, error) {
 // MustNewModule mirrors the panic-on-error variant used by user/audit. It is
 // the preferred entry point for catalog literals that cannot accept an error
 // return.
+//
+// Panics if NewModule returns an error (for example, when a required option
+// is missing). Use NewModule when an error return is preferred.
 func MustNewModule(opts ...Option) *Module {
 	m, err := NewModule(opts...)
 	if err != nil {

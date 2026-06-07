@@ -13,6 +13,10 @@ import (
 	"strings"
 )
 
+// LoadTemplateSource loads the homepage template for a locale from siteDir and
+// concatenates it with every partial in siteDir/partials (sorted). When explicit
+// is non-empty it is used as the only main-template candidate; otherwise
+// locale-specific and default names are tried in order.
 func LoadTemplateSource(siteDir, locale, explicit string) (string, error) {
 	candidates := make([]string, 0, 3)
 	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
@@ -48,6 +52,8 @@ func LoadTemplateSource(siteDir, locale, explicit string) (string, error) {
 	return strings.Join(parts, "\n"), nil
 }
 
+// LoadBundle resolves the asset names for a locale (see ResolveAssetNames) and
+// returns their contents concatenated with newlines. Missing files are skipped.
 func LoadBundle(siteDir, locale string, files []string, fallback string) (string, error) {
 	names, err := ResolveAssetNames(siteDir, locale, files, fallback)
 	if err != nil {
@@ -69,6 +75,10 @@ func LoadBundle(siteDir, locale string, files []string, fallback string) (string
 	return strings.Join(parts, "\n"), nil
 }
 
+// ResolveAssetNames returns the safe, existing asset file names under siteDir
+// for a locale. Explicit files take precedence; otherwise a locale-specific name
+// and the fallback are tried. Names are validated to stay within siteDir, and
+// missing files and directories are skipped.
 func ResolveAssetNames(siteDir, locale string, files []string, fallback string) ([]string, error) {
 	candidates := make([]string, 0, len(files)+2)
 	if len(files) > 0 {
@@ -104,6 +114,8 @@ func ResolveAssetNames(siteDir, locale string, files []string, fallback string) 
 	return names, nil
 }
 
+// LoadStylesheetURLs resolves the stylesheet asset names for a locale and maps
+// each to its public URL (see PublicAssetURL) for the given client slug.
 func LoadStylesheetURLs(siteDir, locale, clientSlug string, files []string) ([]string, error) {
 	names, err := ResolveAssetNames(siteDir, locale, files, "homepage.css")
 	if err != nil {

@@ -39,9 +39,14 @@ type QueryFilter struct {
 }
 
 // Store is the persistence contract for audit_management. The OSS surface is
-// append-only; update/delete are deliberately omitted.
+// append-only; update/delete are deliberately omitted. Implementations must be
+// safe for concurrent use by multiple goroutines.
 type Store interface {
+	// Append records an audit event. Implementations return ErrDuplicateID
+	// when the event ID is already in use.
 	Append(ctx context.Context, e *Event) error
+	// Query returns matching events ordered chronologically (oldest first),
+	// capped by the filter's Limit.
 	Query(ctx context.Context, f QueryFilter) ([]*Event, error)
 }
 

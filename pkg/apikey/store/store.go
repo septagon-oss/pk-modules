@@ -31,13 +31,24 @@ type APIKey struct {
 	CreatedAt  time.Time
 }
 
-// Store is the persistence contract for api_key_management.
+// Store is the persistence contract for api_key_management. Implementations
+// must be safe for concurrent use by multiple goroutines.
 type Store interface {
+	// Create persists a new API key. Implementations return ErrDuplicate when
+	// the key ID is already in use.
 	Create(ctx context.Context, k *APIKey) error
+	// Get returns the key with the given ID, or ErrNotFound if none exists.
 	Get(ctx context.Context, id string) (*APIKey, error)
+	// GetByPrefix returns every key sharing the given prefix (revoked or not);
+	// callers verify the hash before trusting a candidate. The result is empty
+	// when no key matches.
 	GetByPrefix(ctx context.Context, prefix string) ([]*APIKey, error)
+	// List returns every key for the tenant ordered by creation time descending.
 	List(ctx context.Context, tenantID string) ([]*APIKey, error)
+	// Revoke marks the key revoked. It returns ErrNotFound when no key exists
+	// and is a no-op when the key is already revoked.
 	Revoke(ctx context.Context, id string) error
+	// UpdateLastUsed records the most recent use timestamp for the key.
 	UpdateLastUsed(ctx context.Context, id string, at time.Time) error
 }
 

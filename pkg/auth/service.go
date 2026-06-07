@@ -190,7 +190,7 @@ func (s *service) InvalidateAllSessions(ctx context.Context, userID string) erro
 }
 
 // lookupUser resolves a user by the credential carrier. Both email and
-// username are supported in v0.0.0; Pro replaces lookupUser to layer SSO,
+// username are supported in v0.1.0; Pro replaces lookupUser to layer SSO,
 // federated identity, and risk-aware lookups.
 func (s *service) lookupUser(ctx context.Context, tenantID string, creds Credentials) (*user.User, error) {
 	if s.users == nil {

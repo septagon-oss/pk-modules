@@ -95,6 +95,10 @@ func NewModule(opts ...Option) (*Module, error) {
 }
 
 // MustNewModule is the panic-on-error variant of NewModule.
+//
+// Panics if NewModule returns an error (for example, when required options
+// such as a store or DSN are missing or the backing database cannot be
+// opened). Use NewModule when an error return is preferred.
 func MustNewModule(opts ...Option) *Module {
 	m, err := NewModule(opts...)
 	if err != nil {

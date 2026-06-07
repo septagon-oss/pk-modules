@@ -30,14 +30,29 @@ type Content struct {
 	UpdatedAt   time.Time
 }
 
-// Store is the persistence contract for content_management.
+// Store is the persistence contract for content_management. Implementations
+// must be safe for concurrent use by multiple goroutines.
 type Store interface {
+	// Create persists a new content row. Implementations return ErrSlugTaken
+	// when the (tenant, kind, slug) tuple is already in use and ErrDuplicate
+	// when the ID collides.
 	Create(ctx context.Context, c *Content) error
+	// Get returns the row with the given ID, or ErrNotFound if none exists.
 	Get(ctx context.Context, id string) (*Content, error)
+	// GetBySlug returns the row identified by (tenant, kind, slug), or
+	// ErrNotFound if none exists.
 	GetBySlug(ctx context.Context, tenantID, kind, slug string) (*Content, error)
+	// List returns rows for the tenant (optionally filtered by kind) ordered by
+	// creation time descending, paged by limit and offset.
 	List(ctx context.Context, tenantID, kind string, limit, offset int) ([]*Content, error)
+	// Update overwrites the mutable fields of an existing row. It returns
+	// ErrNotFound when no row matches and ErrSlugTaken on a slug conflict.
 	Update(ctx context.Context, c *Content) error
+	// Delete removes the row with the given ID, returning ErrNotFound when no
+	// row matches.
 	Delete(ctx context.Context, id string) error
+	// SetPublished sets or clears (nil) the publication timestamp. It returns
+	// ErrNotFound when no row matches.
 	SetPublished(ctx context.Context, id string, at *time.Time) error
 }
 

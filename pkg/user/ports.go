@@ -33,7 +33,7 @@ type UserBoundaryReader interface {
 }
 
 // UserBoundaryRoleManager is a placeholder role-management port. Roles are
-// minimal in v0.0.0; full RBAC ships with pk-pro.
+// minimal in v0.1.0; full RBAC ships with pk-pro.
 type UserBoundaryRoleManager interface {
 	AssignRole(ctx context.Context, userID, role string) error
 	Roles(ctx context.Context, userID string) ([]string, error)

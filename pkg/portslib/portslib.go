@@ -66,7 +66,7 @@ type HealthRegistrar interface {
 }
 
 // Notification is the canonical in-app notification record. Severity values
-// are restricted to "info", "warning", and "critical" in v0.0.0.
+// are restricted to "info", "warning", and "critical" in v0.1.0.
 type Notification struct {
 	ID        string
 	TenantID  string
@@ -87,7 +87,7 @@ type NotificationChannel interface {
 }
 
 // TranslationRegistrar is the no-op-by-default key/lang/text registration
-// surface for future i18n. v0.0.0 modules use English literals.
+// surface for future i18n. v0.1.0 modules use English literals.
 type TranslationRegistrar interface {
 	Register(key, lang, text string) error
 }

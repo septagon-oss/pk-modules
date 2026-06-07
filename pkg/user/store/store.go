@@ -28,15 +28,32 @@ type User struct {
 	UpdatedAt   time.Time
 }
 
-// Store is the persistence contract for user_management.
+// Store is the persistence contract for user_management. Implementations must
+// be safe for concurrent use by multiple goroutines.
 type Store interface {
+	// Create persists a new user. Implementations return ErrDuplicateEmail or
+	// ErrDuplicateUsername when tenant-scoped uniqueness is violated.
 	Create(ctx context.Context, u *User) error
+	// Get returns the user with the given ID, or ErrNotFound if none exists.
 	Get(ctx context.Context, id string) (*User, error)
+	// GetByEmail returns the user identified by (tenant, email), or ErrNotFound
+	// if none exists.
 	GetByEmail(ctx context.Context, tenantID, email string) (*User, error)
+	// GetByUsername returns the user identified by (tenant, username), or
+	// ErrNotFound if none exists.
 	GetByUsername(ctx context.Context, tenantID, username string) (*User, error)
+	// List returns users for the tenant ordered by username, paged by limit and
+	// offset.
 	List(ctx context.Context, tenantID string, limit, offset int) ([]*User, error)
+	// Update overwrites a user's mutable fields except the password hash. It
+	// returns ErrNotFound when no user matches and a duplicate sentinel on a
+	// uniqueness conflict.
 	Update(ctx context.Context, u *User) error
+	// UpdatePassHash rewrites the stored password hash, returning ErrNotFound
+	// when no user matches.
 	UpdatePassHash(ctx context.Context, id, passHash string, updatedAt time.Time) error
+	// Delete removes the user with the given ID, returning ErrNotFound when no
+	// user matches.
 	Delete(ctx context.Context, id string) error
 }
 

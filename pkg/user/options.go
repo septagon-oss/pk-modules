@@ -63,7 +63,7 @@ func WithSQLiteDSN(dsn string) Option {
 
 // WithSQLiteDriver overrides the sql.Open driver name used by WithSQLiteDSN.
 // The default ("sqlite") matches modernc.org/sqlite, which is the OSS
-// reference driver for v0.0.0.
+// reference driver for v0.1.0.
 func WithSQLiteDriver(driverName string) Option {
 	return func(c *config) { c.sqliteDriver = driverName }
 }

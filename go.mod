@@ -3,7 +3,7 @@ module github.com/septagon-oss/pk-modules
 go 1.26
 
 require (
-	github.com/septagon-oss/pk-core v0.0.0
+	github.com/septagon-oss/pk-core v0.1.0
 	modernc.org/sqlite v1.50.1
 )
 

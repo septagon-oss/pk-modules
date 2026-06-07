@@ -1,10 +1,23 @@
+# OS / editor
 .DS_Store
+
+# Local environment
 .env
 .env.*
 !.env.example
+
+# Go build & test artifacts
 .tmp*
 .cache*
-.generated/
 .gocache
 .gotmp
+.generated/
 coverage.out
+dist/
+build/
+node_modules/
+
+# Local binaries & databases
+/pk
+/minimal
+*.db
