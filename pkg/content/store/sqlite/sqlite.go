@@ -99,7 +99,8 @@ func (s *Store) Create(ctx context.Context, c *store.Content) error {
 	if c.UpdatedAt.IsZero() {
 		c.UpdatedAt = c.CreatedAt
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO content (id, tenant_id, kind, slug, title, body, body_format, author_id, published_at, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		c.ID, c.TenantID, c.Kind, c.Slug, c.Title, c.Body, c.BodyFormat, c.AuthorID,
@@ -126,7 +127,8 @@ func (s *Store) Get(ctx context.Context, id string) (*store.Content, error) {
 
 // GetBySlug returns a content row by (tenant_id, kind, slug).
 func (s *Store) GetBySlug(ctx context.Context, tenantID, kind, slug string) (*store.Content, error) {
-	row := s.db.QueryRowContext(ctx,
+	row := s.db.QueryRowContext(
+		ctx,
 		selectColumns+` WHERE tenant_id = ? AND kind = ? AND slug = ?`,
 		tenantID, kind, slug,
 	)
@@ -163,7 +165,8 @@ func (s *Store) List(ctx context.Context, tenantID, kind string, limit, offset i
 		args = append(args, kind)
 	}
 	args = append(args, limit, offset)
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.db.QueryContext(
+		ctx,
 		selectColumns+` WHERE `+strings.Join(clauses, " AND ")+` ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		args...,
 	)
@@ -192,7 +195,8 @@ func (s *Store) Update(ctx context.Context, c *store.Content) error {
 		return errors.New("content/sqlite: nil content")
 	}
 	c.UpdatedAt = time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE content SET tenant_id = ?, kind = ?, slug = ?, title = ?, body = ?, body_format = ?, author_id = ?, updated_at = ?
 		 WHERE id = ?`,
 		c.TenantID, c.Kind, c.Slug, c.Title, c.Body, c.BodyFormat, c.AuthorID, c.UpdatedAt, c.ID,
@@ -227,7 +231,8 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 // (transitioning the row back to draft).
 func (s *Store) SetPublished(ctx context.Context, id string, at *time.Time) error {
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE content SET published_at = ?, updated_at = ? WHERE id = ?`,
 		nullableTime(at), now, id,
 	)

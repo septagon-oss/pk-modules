@@ -85,7 +85,8 @@ func MustNewModule(opts ...Option) *Module {
 
 // Compose returns the module.Composable for catalog assembly.
 func (m *Module) Compose() pkmodule.Composable {
-	return pkmodule.Must(m.metadata,
+	return pkmodule.Must(
+		m.metadata,
 		pkmodule.WithProvides(
 			pkmodule.Provide[portslib.AdminRegistrar](ModuleVersion),
 		),

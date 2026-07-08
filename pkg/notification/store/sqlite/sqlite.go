@@ -101,7 +101,8 @@ func (s *Store) Create(ctx context.Context, n *store.Notification) error {
 	if n.EmittedAt.IsZero() {
 		n.EmittedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO notifications (id, tenant_id, user_id, title, body, category, severity, data, read_at, emitted_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		n.ID, n.TenantID, n.UserID, n.Title, n.Body, nullString(n.Category), n.Severity,
@@ -129,7 +130,8 @@ func (s *Store) GetByUser(ctx context.Context, userID string, limit, offset int)
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.db.QueryContext(
+		ctx,
 		selectNotificationColumns+` WHERE user_id = ? ORDER BY emitted_at DESC LIMIT ? OFFSET ?`,
 		userID, limit, offset,
 	)
@@ -156,7 +158,8 @@ func (s *Store) MarkRead(ctx context.Context, id string, at time.Time) error {
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE notifications SET read_at = ? WHERE id = ?`,
 		at, id,
 	)
@@ -180,7 +183,8 @@ func (s *Store) AddSubscription(ctx context.Context, sub *store.Subscription) er
 	if sub.CreatedAt.IsZero() {
 		sub.CreatedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO notification_subscriptions (id, tenant_id, user_id, category, channel, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		sub.ID, sub.TenantID, sub.UserID, nullString(sub.Category), sub.Channel, sub.CreatedAt,
@@ -196,7 +200,8 @@ func (s *Store) AddSubscription(ctx context.Context, sub *store.Subscription) er
 
 // RemoveSubscription deletes a subscription row by ID.
 func (s *Store) RemoveSubscription(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`DELETE FROM notification_subscriptions WHERE id = ?`, id,
 	)
 	if err != nil {
@@ -211,7 +216,8 @@ func (s *Store) RemoveSubscription(ctx context.Context, id string) error {
 
 // ListSubscriptions returns every subscription for the given user.
 func (s *Store) ListSubscriptions(ctx context.Context, userID string) ([]*store.Subscription, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.db.QueryContext(
+		ctx,
 		selectSubscriptionColumns+` WHERE user_id = ? ORDER BY created_at ASC`,
 		userID,
 	)

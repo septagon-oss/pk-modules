@@ -96,7 +96,8 @@ func (s *Store) Create(ctx context.Context, u *store.User) error {
 	if u.UpdatedAt.IsZero() {
 		u.UpdatedAt = now
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO users (id, tenant_id, email, username, pass_hash, display_name, active, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		u.ID, u.TenantID, u.Email, u.Username, u.PassHash, u.DisplayName, boolToInt(u.Active), u.CreatedAt, u.UpdatedAt,
@@ -161,7 +162,8 @@ func (s *Store) Update(ctx context.Context, u *store.User) error {
 		return errors.New("user/sqlite: nil user")
 	}
 	u.UpdatedAt = time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE users SET email = ?, username = ?, display_name = ?, active = ?, updated_at = ? WHERE id = ?`,
 		u.Email, u.Username, u.DisplayName, boolToInt(u.Active), u.UpdatedAt, u.ID,
 	)
@@ -180,7 +182,8 @@ func (s *Store) UpdatePassHash(ctx context.Context, id, passHash string, updated
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()
 	}
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE users SET pass_hash = ?, updated_at = ? WHERE id = ?`,
 		passHash, updatedAt, id,
 	)

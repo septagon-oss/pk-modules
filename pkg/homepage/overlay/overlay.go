@@ -313,7 +313,8 @@ func BodyClass(clientSlug, theme, experience string) string {
 		"overlay-homepage-" + ClassToken(clientSlug),
 	}
 	if strings.TrimSpace(theme) != "" || strings.TrimSpace(experience) != "" {
-		classes = append(classes,
+		classes = append(
+			classes,
 			"overlay-theme-"+ClassToken(theme),
 			"overlay-experience-"+ClassToken(experience),
 		)

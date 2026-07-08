@@ -22,7 +22,8 @@ func LoadTemplateSource(siteDir, locale, explicit string) (string, error) {
 	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
 		candidates = append(candidates, trimmed)
 	} else {
-		candidates = append(candidates,
+		candidates = append(
+			candidates,
 			"homepage."+locale+".template.html",
 			"homepage.template.html",
 			"homepage.html",

@@ -90,7 +90,8 @@ func (s *Store) Create(ctx context.Context, t *store.Tenant) error {
 	if t.UpdatedAt.IsZero() {
 		t.UpdatedAt = now
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO tenants (id, slug, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
 		t.ID, t.Slug, t.Name, t.CreatedAt, t.UpdatedAt,
 	)
@@ -145,7 +146,8 @@ func (s *Store) Update(ctx context.Context, t *store.Tenant) error {
 		return errors.New("tenant/sqlite: nil tenant")
 	}
 	t.UpdatedAt = time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE tenants SET slug = ?, name = ?, updated_at = ? WHERE id = ?`,
 		t.Slug, t.Name, t.UpdatedAt, t.ID,
 	)

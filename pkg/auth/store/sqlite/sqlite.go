@@ -88,7 +88,8 @@ func (s *Store) Create(ctx context.Context, sess *store.Session) error {
 	if sess.IssuedAt.IsZero() {
 		sess.IssuedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO auth_sessions (id, user_id, tenant_id, issued_at, expires_at, revoked_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		sess.ID, sess.UserID, sess.TenantID, sess.IssuedAt, sess.ExpiresAt, nullableTime(sess.RevokedAt),
@@ -118,7 +119,8 @@ func (s *Store) Get(ctx context.Context, id string) (*store.Session, error) {
 // Revoke marks a single session revoked at time.Now().UTC().
 func (s *Store) Revoke(ctx context.Context, id string) error {
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
 		now, id,
 	)
@@ -138,7 +140,8 @@ func (s *Store) Revoke(ctx context.Context, id string) error {
 // RevokeByUser marks all live sessions belonging to userID as revoked.
 func (s *Store) RevokeByUser(ctx context.Context, userID string) error {
 	now := time.Now().UTC()
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL`,
 		now, userID,
 	)

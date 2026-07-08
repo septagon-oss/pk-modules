@@ -103,7 +103,8 @@ func parsePageTemplates() map[string]*template.Template {
 	pages := []string{"home", "entity_list", "entity_form"}
 	out := make(map[string]*template.Template, len(pages))
 	for _, p := range pages {
-		t := template.Must(template.ParseFS(templatesFS,
+		t := template.Must(template.ParseFS(
+			templatesFS,
 			"templates/layout.tmpl",
 			"templates/sidebar.tmpl",
 			"templates/"+p+".tmpl",

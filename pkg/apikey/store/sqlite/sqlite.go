@@ -91,7 +91,8 @@ func (s *Store) Create(ctx context.Context, k *store.APIKey) error {
 	if k.CreatedAt.IsZero() {
 		k.CreatedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO api_keys (id, tenant_id, user_id, name, prefix, hash, scopes, last_used_at, revoked_at, expires_at, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		k.ID, k.TenantID, k.UserID, k.Name, k.Prefix, k.Hash, k.Scopes,
@@ -144,7 +145,8 @@ func (s *Store) GetByPrefix(ctx context.Context, prefix string) ([]*store.APIKey
 
 // List returns every API key for the tenant ordered by created_at desc.
 func (s *Store) List(ctx context.Context, tenantID string) ([]*store.APIKey, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.db.QueryContext(
+		ctx,
 		selectColumns+` WHERE tenant_id = ? ORDER BY created_at DESC`,
 		tenantID,
 	)
@@ -169,7 +171,8 @@ func (s *Store) List(ctx context.Context, tenantID string) ([]*store.APIKey, err
 // Revoke marks a key revoked at time.Now().UTC().
 func (s *Store) Revoke(ctx context.Context, id string) error {
 	now := time.Now().UTC()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(
+		ctx,
 		`UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
 		now, id,
 	)
@@ -190,7 +193,8 @@ func (s *Store) UpdateLastUsed(ctx context.Context, id string, at time.Time) err
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`UPDATE api_keys SET last_used_at = ? WHERE id = ?`,
 		at, id,
 	)

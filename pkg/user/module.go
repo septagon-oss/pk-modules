@@ -151,7 +151,8 @@ func registerHealth(r portslib.HealthRegistrar, st store.Store) error {
 // Compose returns the module.Composable representation that the catalog
 // consumes when validating port wiring.
 func (m *Module) Compose() pkmodule.Composable {
-	return pkmodule.Must(m.metadata,
+	return pkmodule.Must(
+		m.metadata,
 		pkmodule.WithProvides(
 			pkmodule.Provide[UserService](ModuleVersion),
 			pkmodule.Provide[UserBoundaryReader](ModuleVersion),

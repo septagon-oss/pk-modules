@@ -91,7 +91,8 @@ func (s *Store) Append(ctx context.Context, e *store.Event) error {
 	if e.EmittedAt.IsZero() {
 		e.EmittedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.ExecContext(
+		ctx,
 		`INSERT INTO audit_events (id, tenant_id, actor, action, resource, severity, details, emitted_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		e.ID, e.TenantID, e.Actor, e.Action, e.Resource, e.Severity, e.Details, e.EmittedAt,

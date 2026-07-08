@@ -126,7 +126,8 @@ func generateID(emittedAt time.Time, tenantID, action string) (string, error) {
 	if _, err := rand.Read(buf[:]); err != nil {
 		return "", fmt.Errorf("audit: generateID: %w", err)
 	}
-	return fmt.Sprintf("%d-%s-%s-%s",
+	return fmt.Sprintf(
+		"%d-%s-%s-%s",
 		emittedAt.UTC().UnixNano(),
 		shorten(tenantID),
 		shorten(action),

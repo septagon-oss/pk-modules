@@ -95,7 +95,8 @@ func MustNewModule(opts ...Option) *Module {
 // Compose returns the module.Composable representation that the catalog
 // consumes when validating port wiring.
 func (m *Module) Compose() pkmodule.Composable {
-	return pkmodule.Must(m.metadata,
+	return pkmodule.Must(
+		m.metadata,
 		pkmodule.WithProvides(
 			pkmodule.Provide[portslib.HealthRegistrar](ModuleVersion),
 			pkmodule.Provide[HealthService](ModuleVersion),
