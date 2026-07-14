@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -ec
-GO_ENV ?= GOWORK=off GOCACHE=$(CURDIR)/.tmp-go-cache GOTMPDIR=$(CURDIR)/.tmp-go-tmp
+GO_ENV ?= GOWORK=off GOTMPDIR=$(CURDIR)/.tmp-go-tmp
 STATICCHECK ?= go run honnef.co/go/tools/cmd/staticcheck@latest
 STATICCHECK_CACHE ?= $(CURDIR)/.tmp-staticcheck-cache
 TMPDIRS := .tmp-go-cache .tmp-go-tmp .tmp-staticcheck-cache
