@@ -1,3 +1,7 @@
+// Implements: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package tenant
 
 // options.go owns functional options used by NewModule. New options should be
@@ -18,8 +22,6 @@ type config struct {
 	store        store.Store
 	admin        portslib.AdminRegistrar
 	health       portslib.HealthRegistrar
-	settings     portslib.SettingsRegistrar
-	translator   portslib.TranslationRegistrar
 	sqliteDSN    string
 	sqliteDriver string
 }
@@ -37,17 +39,6 @@ func WithAdminRegistrar(r portslib.AdminRegistrar) Option {
 // WithHealthRegistrar wires the host application's health registrar.
 func WithHealthRegistrar(r portslib.HealthRegistrar) Option {
 	return func(c *config) { c.health = r }
-}
-
-// WithSettingsRegistrar wires the host application's settings registrar.
-func WithSettingsRegistrar(r portslib.SettingsRegistrar) Option {
-	return func(c *config) { c.settings = r }
-}
-
-// WithTranslationRegistrar wires the host application's translation
-// registrar.
-func WithTranslationRegistrar(r portslib.TranslationRegistrar) Option {
-	return func(c *config) { c.translator = r }
 }
 
 // WithSQLiteDSN selects the default sqlite store using the caller-registered

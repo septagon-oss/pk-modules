@@ -1,3 +1,7 @@
+// Implements: REQ-AUTH-001.
+// Per: ADR-0009.
+// Discipline: C-14.
+
 package auth
 
 // ports.go owns the public interfaces other modules consume. Downstream
@@ -27,24 +31,11 @@ type SessionStore interface {
 	RevokeByUser(ctx context.Context, userID string) error
 }
 
-// LoginPolicy is the policy hook auth_management consults before issuing a
-// session and after each attempt. The default PermissiveLoginPolicy never
-// blocks; pk-pro replaces this with rate limiting, lockout, and risk
-// scoring.
+// LoginPolicy is the mandatory policy hook auth_management consults before
+// issuing a session and after each attempt. Hosts provide rate limiting,
+// lockout, and risk scoring through this boundary.
 type LoginPolicy interface {
 	AllowLogin(ctx context.Context, tenantID, identifier string) error
 	RecordFailure(ctx context.Context, tenantID, identifier string)
 	RecordSuccess(ctx context.Context, tenantID, identifier string)
 }
-
-// permissivePolicy is the OSS-default LoginPolicy. It never blocks logins
-// and discards observed attempts. Apps that need lockout or rate limiting
-// supply their own implementation via WithLoginPolicy.
-type permissivePolicy struct{}
-
-func (permissivePolicy) AllowLogin(context.Context, string, string) error { return nil }
-func (permissivePolicy) RecordFailure(context.Context, string, string)    {}
-func (permissivePolicy) RecordSuccess(context.Context, string, string)    {}
-
-// PermissiveLoginPolicy returns a LoginPolicy that never blocks.
-func PermissiveLoginPolicy() LoginPolicy { return permissivePolicy{} }

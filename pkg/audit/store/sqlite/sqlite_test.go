@@ -1,10 +1,7 @@
-// sqlite_test.go exercises the audit_management sqlite store against a real
-// modernc.org/sqlite database opened on a per-test temp file. Tests cover the
-// append-then-query round-trip, chronological ordering, filter combinations,
-// limit capping, and primary-key uniqueness.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+// Validates: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package sqlite_test
 
 import (
@@ -174,7 +171,7 @@ func TestQueryLimitCap(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 	base := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := s.Append(ctx, event(string(rune('a'+i)), base.Add(time.Duration(i)*time.Minute))); err != nil {
 			t.Fatalf("Append: %v", err)
 		}

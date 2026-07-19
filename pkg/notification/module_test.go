@@ -1,11 +1,8 @@
-package notification_test
+// Validates: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.
 
-// module_test.go validates the notification_management module against its
-// public API. Tests live in notification_test to ensure the OSS contract is
-// exercised the way callers see it.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+package notification_test
 
 import (
 	"context"
@@ -141,7 +138,7 @@ func TestGetByUserOrdersByEmittedAt(t *testing.T) {
 	m := newModule(t)
 	ctx := context.Background()
 	t0 := time.Now().UTC()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		n := &portslib.Notification{
 			TenantID:  "t-1",
 			UserID:    "u-1",

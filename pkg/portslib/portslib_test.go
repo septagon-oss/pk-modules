@@ -1,3 +1,7 @@
+// Validates: REQ-PORTS-001.
+// Per: ADR-0009.
+// Discipline: C-14.
+
 package portslib_test
 
 // portslib_test.go validates the shared port contracts in portslib via the
@@ -14,67 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/septagon-oss/pk-core/pkg/observability/health"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
-
-func TestNoopAdminRegistrarAcceptsAllCalls(t *testing.T) {
-	t.Parallel()
-
-	r := portslib.NoopAdminRegistrar()
-	if err := r.RegisterEntityCRUD("blog", "Post", "/api/v1/posts"); err != nil {
-		t.Fatalf("RegisterEntityCRUD: %v", err)
-	}
-	if err := r.RegisterPage(portslib.AdminPage{
-		ModuleID: "blog",
-		Path:     "/admin/blog",
-		Title:    "Blog",
-		Render:   func(http.ResponseWriter, *http.Request) {},
-	}); err != nil {
-		t.Fatalf("RegisterPage: %v", err)
-	}
-	if err := r.RegisterSidebarSection(portslib.SidebarSection{
-		ModuleID: "blog",
-		Label:    "Blog",
-		Order:    10,
-		Items:    []portslib.SidebarItem{{Path: "/admin/blog", Label: "Posts"}},
-	}); err != nil {
-		t.Fatalf("RegisterSidebarSection: %v", err)
-	}
-}
-
-func TestNoopHealthRegistrarAcceptsAllCalls(t *testing.T) {
-	t.Parallel()
-
-	r := portslib.NoopHealthRegistrar()
-	err := r.Register("db", health.CheckerFunc(func(context.Context) error { return nil }))
-	if err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-}
-
-func TestNoopTranslationRegistrarAcceptsAllCalls(t *testing.T) {
-	t.Parallel()
-
-	r := portslib.NoopTranslationRegistrar()
-	if err := r.Register("blog.title", "en", "Blog"); err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-}
-
-func TestNoopSettingsRegistrarAcceptsAllCalls(t *testing.T) {
-	t.Parallel()
-
-	r := portslib.NoopSettingsRegistrar()
-	err := r.Register("blog", "posts_per_page", portslib.SettingSchema{
-		Type:        "int",
-		Default:     20,
-		Description: "How many posts to show per page",
-	})
-	if err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-}
 
 func TestAdminPageZeroValueIsUsable(t *testing.T) {
 	t.Parallel()

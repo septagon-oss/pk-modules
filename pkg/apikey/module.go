@@ -1,3 +1,7 @@
+// Implements: REQ-APIKEY-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package apikey
 
 // module.go owns the singleton wiring for api_key_management: NewModule
@@ -52,8 +56,6 @@ type Module struct {
 	store    store.Store
 	hasher   passhash.Hasher
 	audit    audit.AuditEmitter
-	admin    portslib.AdminRegistrar
-	health   portslib.HealthRegistrar
 	svc      *service
 	handler  *Handler
 	authn    *authenticator
@@ -68,12 +70,6 @@ func NewModule(opts ...Option) (*Module, error) {
 		if opt != nil {
 			opt(&cfg)
 		}
-	}
-	if cfg.admin == nil {
-		cfg.admin = portslib.NoopAdminRegistrar()
-	}
-	if cfg.health == nil {
-		cfg.health = portslib.NoopHealthRegistrar()
 	}
 	if cfg.hasher == nil {
 		bh, err := passhash.NewBcrypt(passhash.DefaultCost)
@@ -98,8 +94,6 @@ func NewModule(opts ...Option) (*Module, error) {
 		store:  st,
 		hasher: cfg.hasher,
 		audit:  cfg.audit,
-		admin:  cfg.admin,
-		health: cfg.health,
 	}
 	m.svc = newService(st, cfg.hasher, cfg.audit)
 	m.handler = NewHandler(m.svc)
@@ -164,21 +158,21 @@ func (m *Module) Compose() pkmodule.Composable {
 			pkmodule.Provide[APIKeyAuthenticator](ModuleVersion),
 		),
 		pkmodule.WithDependencies(
-			pkmodule.Optional[audit.AuditEmitter](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[audit.AuditEmitter](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Emit apikey.issued / apikey.revoked events.",
 				Category:          pkmodule.DependencyCategorySecurity,
 				SubCategory:       "audit",
 				PreferredProvider: "audit_management",
 			}),
-			pkmodule.Optional[portslib.AdminRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Mount the API keys admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
-			pkmodule.Optional[portslib.HealthRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Surface api_key_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,

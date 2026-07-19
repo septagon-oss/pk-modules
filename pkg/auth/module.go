@@ -1,3 +1,7 @@
+// Implements: REQ-AUTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package auth
 
 // module.go owns the singleton wiring for auth_management: NewModule
@@ -53,8 +57,6 @@ type Module struct {
 	hasher     passhash.Hasher
 	policy     LoginPolicy
 	audit      audit.AuditEmitter
-	admin      portslib.AdminRegistrar
-	health     portslib.HealthRegistrar
 	sessionTTL time.Duration
 	svc        *service
 	handler    *Handler
@@ -71,14 +73,8 @@ func NewModule(opts ...Option) (*Module, error) {
 			opt(&cfg)
 		}
 	}
-	if cfg.admin == nil {
-		cfg.admin = portslib.NoopAdminRegistrar()
-	}
-	if cfg.health == nil {
-		cfg.health = portslib.NoopHealthRegistrar()
-	}
 	if cfg.policy == nil {
-		cfg.policy = PermissiveLoginPolicy()
+		return nil, errors.New("auth: no login policy configured — wire one via WithLoginPolicy")
 	}
 	if cfg.sessionTTL <= 0 {
 		cfg.sessionTTL = defaultSessionTTL
@@ -114,8 +110,6 @@ func NewModule(opts ...Option) (*Module, error) {
 		hasher:     cfg.hasher,
 		policy:     cfg.policy,
 		audit:      cfg.audit,
-		admin:      cfg.admin,
-		health:     cfg.health,
 		sessionTTL: cfg.sessionTTL,
 	}
 	m.svc = newService(sessions, cfg.users, cfg.hasher, cfg.policy, cfg.audit, cfg.sessionTTL)
@@ -191,28 +185,28 @@ func (m *Module) Compose() pkmodule.Composable {
 			pkmodule.Provide[AuthService](ModuleVersion),
 		),
 		pkmodule.WithDependencies(
-			pkmodule.Require[user.UserBoundaryReader](pkmodule.DependencySpec{
+			pkmodule.RequiresPort[user.UserBoundaryReader](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Resolve user credentials at login time.",
 				Category:          pkmodule.DependencyCategoryBusiness,
 				SubCategory:       "user",
 				PreferredProvider: "user_management",
 			}),
-			pkmodule.Optional[audit.AuditEmitter](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[audit.AuditEmitter](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Emit auth.login_success and auth.login_failure events.",
 				Category:          pkmodule.DependencyCategorySecurity,
 				SubCategory:       "audit",
 				PreferredProvider: "audit_management",
 			}),
-			pkmodule.Optional[portslib.AdminRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Mount the sessions admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
-			pkmodule.Optional[portslib.HealthRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Surface auth_management session store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,

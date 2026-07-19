@@ -1,3 +1,7 @@
+// Implements: REQ-AUTH-010.
+// Per: ADR-0009.
+// Discipline: C-14.
+
 package auth
 
 // service.go owns the default AuthService implementation. Pro embeds
@@ -58,9 +62,6 @@ func newService(
 	emitter audit.AuditEmitter,
 	ttl time.Duration,
 ) *service {
-	if policy == nil {
-		policy = PermissiveLoginPolicy()
-	}
 	return &service{
 		sessions:   sessions,
 		users:      users,
@@ -202,8 +203,6 @@ func (s *service) lookupUser(ctx context.Context, tenantID string, creds Credent
 	case strings.TrimSpace(creds.Username) != "":
 		return s.users.GetByUsername(ctx, tenantID, creds.Username)
 	default:
-		// Credentials.Identifier() should have caught this; this branch
-		// exists as a defensive fallback.
 		return nil, ErrNoCredentials
 	}
 }

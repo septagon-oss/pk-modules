@@ -1,3 +1,7 @@
+// Implements: REQ-ADMIN-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package admin
 
 // module.go owns the admin_management Module struct and its NewModule
@@ -33,7 +37,6 @@ type Module struct {
 	shell    *Shell
 	title    string
 	basePath string
-	health   portslib.HealthRegistrar
 }
 
 // NewModule constructs the admin module.
@@ -47,10 +50,6 @@ func NewModule(opts ...Option) (*Module, error) {
 			opt(cfg)
 		}
 	}
-	if cfg.health == nil {
-		cfg.health = portslib.NoopHealthRegistrar()
-	}
-
 	shell := NewShell(ShellOptions{
 		Title:    cfg.title,
 		BasePath: cfg.basePath,
@@ -66,7 +65,6 @@ func NewModule(opts ...Option) (*Module, error) {
 		shell:    shell,
 		title:    shell.Title(),
 		basePath: shell.BasePath(),
-		health:   cfg.health,
 	}
 	return m, nil
 }

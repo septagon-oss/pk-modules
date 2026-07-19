@@ -1,3 +1,7 @@
+// Implements: REQ-CONTENT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package content
 
 // module.go owns the singleton wiring for content_management: NewModule
@@ -45,8 +49,6 @@ type Module struct {
 	store    store.Store
 	tenant   tenant.TenantService
 	audit    audit.AuditEmitter
-	admin    portslib.AdminRegistrar
-	health   portslib.HealthRegistrar
 	svc      *service
 	handler  *Handler
 }
@@ -61,13 +63,6 @@ func NewModule(opts ...Option) (*Module, error) {
 			opt(&cfg)
 		}
 	}
-	if cfg.admin == nil {
-		cfg.admin = portslib.NoopAdminRegistrar()
-	}
-	if cfg.health == nil {
-		cfg.health = portslib.NoopHealthRegistrar()
-	}
-
 	st, err := resolveStore(cfg)
 	if err != nil {
 		return nil, err
@@ -83,8 +78,6 @@ func NewModule(opts ...Option) (*Module, error) {
 		store:  st,
 		tenant: cfg.tenant,
 		audit:  cfg.audit,
-		admin:  cfg.admin,
-		health: cfg.health,
 	}
 	m.svc = newService(st, cfg.audit)
 	m.handler = NewHandler(m.svc)
@@ -150,28 +143,28 @@ func (m *Module) Compose() pkmodule.Composable {
 			pkmodule.Provide[ContentPublisher](ModuleVersion),
 		),
 		pkmodule.WithDependencies(
-			pkmodule.Optional[tenant.TenantService](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[tenant.TenantService](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Validate tenant references for slug uniqueness scope.",
 				Category:          pkmodule.DependencyCategoryBusiness,
 				SubCategory:       "tenant",
 				PreferredProvider: "tenant_management",
 			}),
-			pkmodule.Optional[audit.AuditEmitter](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[audit.AuditEmitter](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Emit content.created/updated/published/unpublished events.",
 				Category:          pkmodule.DependencyCategorySecurity,
 				SubCategory:       "audit",
 				PreferredProvider: "audit_management",
 			}),
-			pkmodule.Optional[portslib.AdminRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Mount the content admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
-			pkmodule.Optional[portslib.HealthRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Surface content_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,

@@ -1,16 +1,14 @@
-package apikey_test
+// Validates: REQ-APIKEY-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 
-// module_test.go validates the api_key_management module against its
-// public API. Tests live in apikey_test to ensure the OSS contract is
-// exercised the way callers see it.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+package apikey_test
 
 import (
 	"context"
 	"errors"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -48,9 +46,7 @@ func (f *fakeAuditEmitter) Emit(_ context.Context, action, resource string, deta
 	// Copy details so subsequent mutations by the service don't race with
 	// the assertion reads.
 	cp := make(map[string]any, len(details))
-	for k, v := range details {
-		cp[k] = v
-	}
+	maps.Copy(cp, details)
 	f.calls = append(f.calls, auditCall{Action: action, Resource: resource, Details: cp})
 	return nil
 }
@@ -242,7 +238,7 @@ func TestListByTenantReturnsAll(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
 	ctx := context.Background()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, _, err := m.Service().Issue(ctx, "t-1", "u-1", "bot", nil, 0); err != nil {
 			t.Fatalf("Issue %d: %v", i, err)
 		}

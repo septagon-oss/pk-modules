@@ -1,3 +1,7 @@
+// Validates: REQ-AUTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package auth_test
 
 // module_test.go validates the auth_management module against its public
@@ -126,6 +130,7 @@ func newModule(t *testing.T, opts ...auth.Option) (*auth.Module, *fakeUserReader
 		auth.WithSQLiteDSN(sqliteDSN(t)),
 		auth.WithUserReader(reader),
 		auth.WithHasher(hasher),
+		auth.WithLoginPolicy(&recordingPolicy{}),
 	}
 	base = append(base, opts...)
 	m, err := auth.NewModule(base...)
@@ -157,7 +162,7 @@ func TestNewModuleDefaults(t *testing.T) {
 
 func TestNewModuleRequiresSessionStore(t *testing.T) {
 	t.Parallel()
-	_, err := auth.NewModule(auth.WithUserReader(newFakeUserReader()))
+	_, err := auth.NewModule(auth.WithUserReader(newFakeUserReader()), auth.WithLoginPolicy(&recordingPolicy{}))
 	if err == nil {
 		t.Fatalf("NewModule() with no session store should error")
 	}
@@ -165,7 +170,7 @@ func TestNewModuleRequiresSessionStore(t *testing.T) {
 
 func TestNewModuleRequiresUserReader(t *testing.T) {
 	t.Parallel()
-	_, err := auth.NewModule(auth.WithSQLiteDSN(sqliteDSN(t)))
+	_, err := auth.NewModule(auth.WithSQLiteDSN(sqliteDSN(t)), auth.WithLoginPolicy(&recordingPolicy{}))
 	if err == nil {
 		t.Fatalf("NewModule() with no user reader should error")
 	}
@@ -368,7 +373,7 @@ func TestInvalidateAllSessionsRevokesAll(t *testing.T) {
 
 	// Create several sessions for the same user.
 	sessions := make([]*auth.Session, 0, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		s, err := m.Service().Login(ctx, "t-1", auth.Credentials{
 			Email:    "alice@example.test",
 			Password: "supersecret",
@@ -422,15 +427,19 @@ func (p *recordingPolicy) AllowLogin(context.Context, string, string) error {
 func (p *recordingPolicy) RecordSuccess(context.Context, string, string) { p.successes++ }
 func (p *recordingPolicy) RecordFailure(context.Context, string, string) { p.failures++ }
 
-func TestPermissivePolicyAllowsAlways(t *testing.T) {
+func TestNewModuleRequiresLoginPolicy(t *testing.T) {
 	t.Parallel()
-	p := auth.PermissiveLoginPolicy()
-	if err := p.AllowLogin(context.Background(), "t-1", "alice@example.test"); err != nil {
-		t.Fatalf("PermissiveLoginPolicy.AllowLogin returned %v", err)
+	_, err := auth.NewModule(
+		auth.WithSQLiteDSN(sqliteDSN(t)),
+		auth.WithUserReader(newFakeUserReader()),
+		auth.WithHasher(newHasher(t)),
+	)
+	if err == nil {
+		t.Fatal("NewModule must fail closed without a login policy")
 	}
-	// Record calls should be inert and never panic.
-	p.RecordFailure(context.Background(), "t-1", "alice@example.test")
-	p.RecordSuccess(context.Background(), "t-1", "alice@example.test")
+	if !strings.Contains(err.Error(), "login policy") {
+		t.Fatalf("err = %v, want it to mention 'login policy'", err)
+	}
 }
 
 func TestPolicyRecordsHits(t *testing.T) {

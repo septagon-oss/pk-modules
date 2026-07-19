@@ -1,3 +1,7 @@
+// Implements: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package tenant
 
 // module.go owns the singleton wiring for tenant_management: NewModule
@@ -44,8 +48,6 @@ type Module struct {
 	svc      *service
 	provider contextProvider
 	handler  *Handler
-	admin    portslib.AdminRegistrar
-	health   portslib.HealthRegistrar
 }
 
 // NewModule constructs a tenant module.
@@ -58,13 +60,6 @@ func NewModule(opts ...Option) (*Module, error) {
 			opt(&cfg)
 		}
 	}
-	if cfg.admin == nil {
-		cfg.admin = portslib.NoopAdminRegistrar()
-	}
-	if cfg.health == nil {
-		cfg.health = portslib.NoopHealthRegistrar()
-	}
-
 	st, err := resolveStore(cfg)
 	if err != nil {
 		return nil, err
@@ -79,8 +74,6 @@ func NewModule(opts ...Option) (*Module, error) {
 		},
 		store:    st,
 		provider: contextProvider{},
-		admin:    cfg.admin,
-		health:   cfg.health,
 	}
 	m.svc = newService(st)
 	m.handler = NewHandler(m.svc)
@@ -150,14 +143,14 @@ func (m *Module) Compose() pkmodule.Composable {
 			pkmodule.Provide[TenantContextProvider](ModuleVersion),
 		),
 		pkmodule.WithDependencies(
-			pkmodule.Optional[portslib.AdminRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Mount the tenants admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
-			pkmodule.Optional[portslib.HealthRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Surface tenant_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,

@@ -1,11 +1,8 @@
-package admin_test
+// Validates: REQ-ADMIN-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 
-// module_test.go validates admin_management's contract: Registrar surface,
-// HTTP handler routing for entity-CRUD/custom-page/static-asset paths,
-// sidebar ordering, duplicate-registration handling, and composability.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+package admin_test
 
 import (
 	"net/http"
@@ -279,7 +276,6 @@ func TestRenderDoesNotDoubleWriteHeader(t *testing.T) {
 		{"entity form edit", "/admin/user_management/User/some-id"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
@@ -380,11 +376,11 @@ func extractHref(t *testing.T, body, label string) string {
 	}
 	tag := body[open:anchor]
 	const marker = `href="`
-	hi := strings.Index(tag, marker)
-	if hi == -1 {
+	_, after, ok := strings.Cut(tag, marker)
+	if !ok {
 		t.Fatalf("no href in anchor for %q: %q", label, tag)
 	}
-	rest := tag[hi+len(marker):]
+	rest := after
 	end := strings.IndexByte(rest, '"')
 	if end == -1 {
 		t.Fatalf("unterminated href in anchor for %q: %q", label, tag)

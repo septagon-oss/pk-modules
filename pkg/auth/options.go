@@ -1,3 +1,7 @@
+// Implements: REQ-AUTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package auth
 
 // options.go owns functional options used by NewModule. New options should
@@ -53,8 +57,7 @@ func WithHasher(h passhash.Hasher) Option {
 	return func(c *config) { c.hasher = h }
 }
 
-// WithLoginPolicy installs the policy hook consulted on every login. The
-// default PermissiveLoginPolicy never blocks.
+// WithLoginPolicy installs the mandatory policy hook consulted on every login.
 func WithLoginPolicy(p LoginPolicy) Option {
 	return func(c *config) { c.policy = p }
 }

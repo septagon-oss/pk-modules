@@ -1,11 +1,8 @@
-package audit_test
+// Validates: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 
-// module_test.go validates the audit_management module against its public
-// API. Tests live in audit_test to ensure the OSS contract is exercised the
-// way callers see it.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+package audit_test
 
 import (
 	"context"
@@ -162,7 +159,7 @@ func TestMultiRecordOrder(t *testing.T) {
 	ctx := context.Background()
 	t0 := time.Now().UTC()
 	want := []string{}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		e := &audit.Event{
 			TenantID:  "t-1",
 			Actor:     "x",
@@ -197,7 +194,7 @@ func TestRecordIDsUniqueUnderContention(t *testing.T) {
 	// Pin EmittedAt so the only differentiator is the random suffix; this
 	// guarantees the test fails if generateID ever drops its random portion.
 	pinned := time.Now().UTC()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		e := &audit.Event{
 			TenantID:  "t-collision",
 			Actor:     "x",
@@ -306,7 +303,6 @@ func TestHandlerListRejectsMalformedQueryParams(t *testing.T) {
 		{"negative limit", "/api/v1/audit-events?limit=-3"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			req := httptest.NewRequest(http.MethodGet, tc.raw, nil)

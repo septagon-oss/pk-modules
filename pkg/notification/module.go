@@ -1,3 +1,7 @@
+// Implements: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package notification
 
 // module.go owns the singleton wiring for notification_management: NewModule
@@ -48,8 +52,6 @@ type Module struct {
 	bus      event.Bus
 	users    user.UserBoundaryReader
 	audit    audit.AuditEmitter
-	admin    portslib.AdminRegistrar
-	health   portslib.HealthRegistrar
 	svc      *service
 	handler  *Handler
 }
@@ -64,13 +66,6 @@ func NewModule(opts ...Option) (*Module, error) {
 			opt(&cfg)
 		}
 	}
-	if cfg.admin == nil {
-		cfg.admin = portslib.NoopAdminRegistrar()
-	}
-	if cfg.health == nil {
-		cfg.health = portslib.NoopHealthRegistrar()
-	}
-
 	st, err := resolveStore(cfg)
 	if err != nil {
 		return nil, err
@@ -96,8 +91,6 @@ func NewModule(opts ...Option) (*Module, error) {
 		bus:      cfg.bus,
 		users:    cfg.users,
 		audit:    cfg.audit,
-		admin:    cfg.admin,
-		health:   cfg.health,
 	}
 	m.svc = newService(st, channels, cfg.audit)
 	m.handler = NewHandler(m.svc)
@@ -161,28 +154,28 @@ func (m *Module) Compose() pkmodule.Composable {
 			pkmodule.Provide[NotificationService](ModuleVersion),
 		),
 		pkmodule.WithDependencies(
-			pkmodule.Optional[user.UserBoundaryReader](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[user.UserBoundaryReader](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Validate recipient identity at dispatch time.",
 				Category:          pkmodule.DependencyCategoryBusiness,
 				SubCategory:       "user",
 				PreferredProvider: "user_management",
 			}),
-			pkmodule.Optional[audit.AuditEmitter](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[audit.AuditEmitter](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Emit notification.dispatched events.",
 				Category:          pkmodule.DependencyCategorySecurity,
 				SubCategory:       "audit",
 				PreferredProvider: "audit_management",
 			}),
-			pkmodule.Optional[portslib.AdminRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Mount the notifications admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
-			pkmodule.Optional[portslib.HealthRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Surface notification_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,

@@ -1,8 +1,11 @@
+// Implements: REQ-PORTS-001.
+// Per: ADR-0009.
+// Discipline: C-14.
+
 package portslib
 
 // portslib.go owns the shared port contracts (AdminRegistrar, HealthRegistrar,
-// NotificationChannel, TranslationRegistrar, SettingsRegistrar) and the small
-// value types that travel across them. The exported surface is intentionally
+// NotificationChannel) and the small value types that travel across them. The exported surface is intentionally
 // minimal so downstream modules can satisfy these contracts without dragging
 // in framework-specific dependencies.
 //
@@ -85,63 +88,3 @@ type NotificationChannel interface {
 	Name() string
 	Deliver(ctx context.Context, n Notification) error
 }
-
-// TranslationRegistrar is the no-op-by-default key/lang/text registration
-// surface for future i18n. v0.1.0 modules use English literals.
-type TranslationRegistrar interface {
-	Register(key, lang, text string) error
-}
-
-// SettingsRegistrar lets modules declare configurable settings shown in the
-// admin UI. Default implementations may ignore registration calls; the schema
-// is informational.
-type SettingsRegistrar interface {
-	Register(group, key string, schema SettingSchema) error
-}
-
-// SettingSchema describes a single configurable setting.
-type SettingSchema struct {
-	Type        string
-	Default     any
-	Description string
-}
-
-// noopAdminRegistrar is the zero-state AdminRegistrar used by tests, dev
-// scaffolds, and modules that do not yet wire an admin shell.
-type noopAdminRegistrar struct{}
-
-func (noopAdminRegistrar) RegisterEntityCRUD(moduleID, entityName, apiPath string) error {
-	return nil
-}
-
-func (noopAdminRegistrar) RegisterPage(AdminPage) error { return nil }
-
-func (noopAdminRegistrar) RegisterSidebarSection(SidebarSection) error { return nil }
-
-// NoopAdminRegistrar returns an AdminRegistrar that accepts every call without
-// side effects. Useful for tests and dev shells.
-func NoopAdminRegistrar() AdminRegistrar { return noopAdminRegistrar{} }
-
-type noopHealthRegistrar struct{}
-
-func (noopHealthRegistrar) Register(string, health.Checker) error { return nil }
-
-// NoopHealthRegistrar returns a HealthRegistrar that accepts every check
-// without side effects.
-func NoopHealthRegistrar() HealthRegistrar { return noopHealthRegistrar{} }
-
-type noopTranslationRegistrar struct{}
-
-func (noopTranslationRegistrar) Register(key, lang, text string) error { return nil }
-
-// NoopTranslationRegistrar returns a TranslationRegistrar that accepts every
-// registration without side effects.
-func NoopTranslationRegistrar() TranslationRegistrar { return noopTranslationRegistrar{} }
-
-type noopSettingsRegistrar struct{}
-
-func (noopSettingsRegistrar) Register(group, key string, schema SettingSchema) error { return nil }
-
-// NoopSettingsRegistrar returns a SettingsRegistrar that accepts every
-// registration without side effects.
-func NoopSettingsRegistrar() SettingsRegistrar { return noopSettingsRegistrar{} }

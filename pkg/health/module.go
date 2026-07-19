@@ -1,3 +1,7 @@
+// Implements: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package health
 
 // module.go owns the singleton wiring for health_management: NewModule
@@ -36,7 +40,6 @@ type Module struct {
 	svc       *service
 	registrar *registrarAdapter
 	handler   *Handler
-	admin     portslib.AdminRegistrar
 }
 
 // NewModule constructs a health module. Returns an error for parity with
@@ -53,10 +56,6 @@ func NewModule(opts ...Option) (*Module, error) {
 	if cfg.registry == nil {
 		cfg.registry = health.NewRegistry()
 	}
-	if cfg.admin == nil {
-		cfg.admin = portslib.NoopAdminRegistrar()
-	}
-
 	m := &Module{
 		metadata: pkmodule.Metadata{
 			ID:          ModuleID,
@@ -65,7 +64,6 @@ func NewModule(opts ...Option) (*Module, error) {
 			Version:     ModuleVersion,
 		},
 		registry: cfg.registry,
-		admin:    cfg.admin,
 	}
 	m.svc = newService(cfg.registry)
 	m.registrar = &registrarAdapter{registry: cfg.registry}
@@ -102,7 +100,7 @@ func (m *Module) Compose() pkmodule.Composable {
 			pkmodule.Provide[HealthService](ModuleVersion),
 		),
 		pkmodule.WithDependencies(
-			pkmodule.Optional[portslib.AdminRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Mount the health admin page.",
 				Category:          pkmodule.DependencyCategoryUI,

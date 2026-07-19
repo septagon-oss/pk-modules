@@ -1,3 +1,7 @@
+// Validates: REQ-AUTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package auth_test
 
 // extension_example_test.go demonstrates how a Pro module embeds *Module
@@ -48,6 +52,7 @@ func TestProEmbeddingCompiles(t *testing.T) {
 		auth.WithSQLiteDSN(dsn),
 		auth.WithUserReader(reader),
 		auth.WithHasher(hasher),
+		auth.WithLoginPolicy(&recordingPolicy{}),
 	)
 	if err != nil {
 		t.Fatalf("NewProAuthModule: %v", err)

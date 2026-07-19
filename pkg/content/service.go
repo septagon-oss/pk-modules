@@ -1,16 +1,14 @@
-package content
+// Implements: REQ-CONTENT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 
-// service.go owns the default ContentService, ContentReader, and
-// ContentPublisher implementations. Pro embeds *service to add scheduled
-// publishing, revision history, and approval workflows.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+package content
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -166,9 +164,7 @@ func (s *service) emit(ctx context.Context, c *Content, action string, extra map
 		"kind": c.Kind,
 		"slug": c.Slug,
 	}
-	for k, v := range extra {
-		details[k] = v
-	}
+	maps.Copy(details, extra)
 	_ = s.audit.Emit(ctx, action, "content:"+c.ID, details)
 }
 

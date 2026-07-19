@@ -1,3 +1,7 @@
+// Implements: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
+
 package audit
 
 // module.go owns the singleton wiring for audit_management: NewModule
@@ -45,8 +49,6 @@ type Module struct {
 	store    store.Store
 	svc      *service
 	handler  *Handler
-	admin    portslib.AdminRegistrar
-	health   portslib.HealthRegistrar
 }
 
 // NewModule constructs an audit module.
@@ -59,13 +61,6 @@ func NewModule(opts ...Option) (*Module, error) {
 			opt(&cfg)
 		}
 	}
-	if cfg.admin == nil {
-		cfg.admin = portslib.NoopAdminRegistrar()
-	}
-	if cfg.health == nil {
-		cfg.health = portslib.NoopHealthRegistrar()
-	}
-
 	st, err := resolveStore(cfg)
 	if err != nil {
 		return nil, err
@@ -78,9 +73,7 @@ func NewModule(opts ...Option) (*Module, error) {
 			Description: ModuleDescription,
 			Version:     ModuleVersion,
 		},
-		store:  st,
-		admin:  cfg.admin,
-		health: cfg.health,
+		store: st,
 	}
 	m.svc = newService(st)
 	m.handler = NewHandler(m.svc, m.svc)
@@ -151,14 +144,14 @@ func (m *Module) Compose() pkmodule.Composable {
 			pkmodule.Provide[AuditReader](ModuleVersion),
 		),
 		pkmodule.WithDependencies(
-			pkmodule.Optional[portslib.AdminRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Mount the audit log admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
-			pkmodule.Optional[portslib.HealthRegistrar](pkmodule.DependencySpec{
+			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "Surface audit_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,

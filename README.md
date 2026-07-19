@@ -57,7 +57,7 @@ func main() {
 - `pkg/admin`, `pkg/health` — a minimal self-contained admin shell and health/readiness reporting.
 - Every data module exposes a `store.Store` persistence port plus a `store/sqlite` reference implementation built on `modernc.org/sqlite` (pure-Go, no cgo).
 - `pkg/coremodules` — the smallest composable bundle wiring tenant + audit + content for OSS examples and downstream distributions.
-- `pkg/portslib` — the shared port contracts and no-op fallbacks modules consume instead of importing one another.
+- `pkg/portslib` — the shared port contracts modules consume explicitly instead of importing one another.
 
 ## Verify
 

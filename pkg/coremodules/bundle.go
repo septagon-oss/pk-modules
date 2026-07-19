@@ -1,11 +1,8 @@
-// Package coremodules provides the smallest OSS module pack.
-package coremodules
+// Implements: REQ-MODULES-001.
+// Per: ADR-0009.
+// Discipline: C-14.
 
-// bundle.go owns the minimal public module bundle used by OSS examples and
-// downstream PlatformKit distributions.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0017 (composition through dependency injection), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+package coremodules
 
 import "github.com/septagon-oss/pk-core/pkg/module"
 
@@ -41,7 +38,7 @@ func NewAudit() module.Composable {
 	return module.Must(
 		module.Metadata{ID: "audit", Name: "Audit", Description: "Audit event recording"},
 		module.WithProvides(module.Provide[AuditService]("0.0.0")),
-		module.WithDependencies(module.Require[TenantService](module.DependencySpec{
+		module.WithDependencies(module.RequiresPort[TenantService](module.PortSpec{
 			Version:           "0.0.0",
 			Purpose:           "scope audit records by tenant",
 			PreferredProvider: "tenant",
@@ -54,12 +51,12 @@ func NewContent() module.Composable {
 	return module.Must(
 		module.Metadata{ID: "content", Name: "Content", Description: "Public content"},
 		module.WithDependencies(
-			module.Require[TenantService](module.DependencySpec{
+			module.RequiresPort[TenantService](module.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "scope content by tenant",
 				PreferredProvider: "tenant",
 			}),
-			module.Require[AuditService](module.DependencySpec{
+			module.RequiresPort[AuditService](module.PortSpec{
 				Version:           "0.0.0",
 				Purpose:           "audit content publication",
 				PreferredProvider: "audit",
