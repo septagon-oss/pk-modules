@@ -13,21 +13,22 @@ import "context"
 // (not on the concrete Module type) for user CRUD operations.
 type UserService interface {
 	Create(ctx context.Context, u *User) error
-	Get(ctx context.Context, id string) (*User, error)
+	Get(ctx context.Context, tenantID, id string) (*User, error)
 	GetByEmail(ctx context.Context, tenantID, email string) (*User, error)
 	GetByUsername(ctx context.Context, tenantID, username string) (*User, error)
 	List(ctx context.Context, tenantID string, limit, offset int) ([]*User, error)
 	Update(ctx context.Context, u *User) error
-	Delete(ctx context.Context, id string) error
-	SetPassword(ctx context.Context, id, plaintext string) error
-	VerifyPassword(ctx context.Context, id, plaintext string) error
+	Delete(ctx context.Context, tenantID, id string) error
+	SetPassword(ctx context.Context, tenantID, id, plaintext string) error
+	VerifyPassword(ctx context.Context, tenantID, id, plaintext string) error
 }
 
 // UserBoundaryReader is the Pro-consumable read-only port used by adjacent
 // modules (audit, api_key, notification, auth) that need to resolve user
-// identity without holding a full UserService reference.
+// identity without holding a full UserService reference. Reads are
+// tenant-scoped: a user in another tenant reads back as ErrNotFound.
 type UserBoundaryReader interface {
-	Get(ctx context.Context, id string) (*User, error)
+	Get(ctx context.Context, tenantID, id string) (*User, error)
 	GetByEmail(ctx context.Context, tenantID, email string) (*User, error)
 	GetByUsername(ctx context.Context, tenantID, username string) (*User, error)
 }

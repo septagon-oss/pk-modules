@@ -197,7 +197,7 @@ func TestServiceCreateThenGet(t *testing.T) {
 	if u.ID == "" {
 		t.Fatalf("Create did not assign ID")
 	}
-	got, err := m.Service().Get(ctx, u.ID)
+	got, err := m.Service().Get(ctx, "t-1", u.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestServiceUpdate(t *testing.T) {
 	if err := m.Service().Update(ctx, u); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	got, err := m.Service().Get(ctx, u.ID)
+	got, err := m.Service().Get(ctx, "t-1", u.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -295,10 +295,10 @@ func TestServiceDelete(t *testing.T) {
 	if err := m.Service().Create(ctx, u); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := m.Service().Delete(ctx, u.ID); err != nil {
+	if err := m.Service().Delete(ctx, "t-1", u.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := m.Service().Get(ctx, u.ID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := m.Service().Get(ctx, "t-1", u.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Get after Delete err = %v, want ErrNotFound", err)
 	}
 }
@@ -311,13 +311,13 @@ func TestSetAndVerifyPassword(t *testing.T) {
 	if err := m.Service().Create(ctx, u); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := m.Service().SetPassword(ctx, u.ID, "Sup3rSecret!"); err != nil {
+	if err := m.Service().SetPassword(ctx, "t-1", u.ID, "Sup3rSecret!"); err != nil {
 		t.Fatalf("SetPassword: %v", err)
 	}
-	if err := m.Service().VerifyPassword(ctx, u.ID, "Sup3rSecret!"); err != nil {
+	if err := m.Service().VerifyPassword(ctx, "t-1", u.ID, "Sup3rSecret!"); err != nil {
 		t.Fatalf("VerifyPassword: %v", err)
 	}
-	err := m.Service().VerifyPassword(ctx, u.ID, "wrong")
+	err := m.Service().VerifyPassword(ctx, "t-1", u.ID, "wrong")
 	if !errors.Is(err, passhash.ErrMismatch) {
 		t.Fatalf("VerifyPassword wrong err = %v, want ErrMismatch", err)
 	}
@@ -331,7 +331,7 @@ func TestVerifyPasswordWithoutSetReturnsMismatch(t *testing.T) {
 	if err := m.Service().Create(ctx, u); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	err := m.Service().VerifyPassword(ctx, u.ID, "anything")
+	err := m.Service().VerifyPassword(ctx, "t-1", u.ID, "anything")
 	if !errors.Is(err, passhash.ErrMismatch) {
 		t.Fatalf("VerifyPassword unset hash err = %v, want ErrMismatch", err)
 	}

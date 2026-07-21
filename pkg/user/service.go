@@ -17,7 +17,6 @@ import (
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
 
 	"github.com/septagon-oss/pk-modules/pkg/tenant"
-	tenantstore "github.com/septagon-oss/pk-modules/pkg/tenant/store"
 	"github.com/septagon-oss/pk-modules/pkg/user/store"
 )
 
@@ -78,18 +77,22 @@ func (s *service) validateTenant(ctx context.Context, tenantID string) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, tenantstore.ErrNotFound) {
+	if errors.Is(err, tenant.ErrNotFound) {
 		return fmt.Errorf("%w: %q", ErrUnknownTenant, tenantID)
 	}
 	return fmt.Errorf("user: validate tenant: %w", err)
 }
 
-// Get returns a user by ID.
-func (s *service) Get(ctx context.Context, id string) (*User, error) {
+// Get returns the user identified by (tenantID, id). A user in another tenant
+// is reported as ErrNotFound.
+func (s *service) Get(ctx context.Context, tenantID, id string) (*User, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return nil, errors.New("user: tenant_id is required")
+	}
 	if strings.TrimSpace(id) == "" {
 		return nil, errors.New("user: id is required")
 	}
-	row, err := s.store.Get(ctx, id)
+	row, err := s.store.Get(ctx, tenantID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -162,17 +165,25 @@ func (s *service) Update(ctx context.Context, u *User) error {
 	return nil
 }
 
-// Delete removes a user by ID.
-func (s *service) Delete(ctx context.Context, id string) error {
+// Delete removes the user identified by (tenantID, id). A user in another
+// tenant is reported as ErrNotFound.
+func (s *service) Delete(ctx context.Context, tenantID, id string) error {
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("user: tenant_id is required")
+	}
 	if strings.TrimSpace(id) == "" {
 		return errors.New("user: id is required")
 	}
-	return s.store.Delete(ctx, id)
+	return s.store.Delete(ctx, tenantID, id)
 }
 
 // SetPassword hashes plaintext via the configured Hasher and persists the
-// resulting encoded representation.
-func (s *service) SetPassword(ctx context.Context, id, plaintext string) error {
+// resulting encoded representation for the user identified by (tenantID, id).
+// A user in another tenant is reported as ErrNotFound.
+func (s *service) SetPassword(ctx context.Context, tenantID, id, plaintext string) error {
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("user: tenant_id is required")
+	}
 	if strings.TrimSpace(id) == "" {
 		return errors.New("user: id is required")
 	}
@@ -186,19 +197,23 @@ func (s *service) SetPassword(ctx context.Context, id, plaintext string) error {
 	if err != nil {
 		return err
 	}
-	return s.store.UpdatePassHash(ctx, id, encoded, time.Now().UTC())
+	return s.store.UpdatePassHash(ctx, tenantID, id, encoded, time.Now().UTC())
 }
 
-// VerifyPassword reads the stored hash for id and validates plaintext against
-// it. Returns nil on success; the underlying passhash error otherwise.
-func (s *service) VerifyPassword(ctx context.Context, id, plaintext string) error {
+// VerifyPassword reads the stored hash for (tenantID, id) and validates
+// plaintext against it. Returns nil on success; the underlying passhash error
+// otherwise. A user in another tenant is reported as ErrNotFound.
+func (s *service) VerifyPassword(ctx context.Context, tenantID, id, plaintext string) error {
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("user: tenant_id is required")
+	}
 	if strings.TrimSpace(id) == "" {
 		return errors.New("user: id is required")
 	}
 	if s.hasher == nil {
 		return errors.New("user: no hasher configured")
 	}
-	row, err := s.store.Get(ctx, id)
+	row, err := s.store.Get(ctx, tenantID, id)
 	if err != nil {
 		return err
 	}

@@ -34,8 +34,10 @@ type Store interface {
 	// Create persists a new user. Implementations return ErrDuplicateEmail or
 	// ErrDuplicateUsername when tenant-scoped uniqueness is violated.
 	Create(ctx context.Context, u *User) error
-	// Get returns the user with the given ID, or ErrNotFound if none exists.
-	Get(ctx context.Context, id string) (*User, error)
+	// Get returns the user identified by (tenantID, id), or ErrNotFound if no
+	// user with that ID exists in that tenant. The tenant predicate is
+	// mandatory so a leaked or guessed ID cannot read across tenants.
+	Get(ctx context.Context, tenantID, id string) (*User, error)
 	// GetByEmail returns the user identified by (tenant, email), or ErrNotFound
 	// if none exists.
 	GetByEmail(ctx context.Context, tenantID, email string) (*User, error)
@@ -49,12 +51,13 @@ type Store interface {
 	// returns ErrNotFound when no user matches and a duplicate sentinel on a
 	// uniqueness conflict.
 	Update(ctx context.Context, u *User) error
-	// UpdatePassHash rewrites the stored password hash, returning ErrNotFound
-	// when no user matches.
-	UpdatePassHash(ctx context.Context, id, passHash string, updatedAt time.Time) error
-	// Delete removes the user with the given ID, returning ErrNotFound when no
-	// user matches.
-	Delete(ctx context.Context, id string) error
+	// UpdatePassHash rewrites the stored password hash for the user identified
+	// by (tenantID, id), returning ErrNotFound when no user matches in that
+	// tenant.
+	UpdatePassHash(ctx context.Context, tenantID, id, passHash string, updatedAt time.Time) error
+	// Delete removes the user identified by (tenantID, id), returning
+	// ErrNotFound when no user matches in that tenant.
+	Delete(ctx context.Context, tenantID, id string) error
 }
 
 // Sentinel errors returned by Store implementations.

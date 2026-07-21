@@ -53,7 +53,7 @@ func TestProEmbeddingCompiles(t *testing.T) {
 	if err := pro.Service().Create(ctx, in); err != nil {
 		t.Fatalf("pro.Service().Create: %v", err)
 	}
-	got, err := pro.Service().Get(ctx, in.ID)
+	got, err := pro.Service().Get(ctx, "t-pro", in.ID)
 	if err != nil {
 		t.Fatalf("pro.Service().Get: %v", err)
 	}

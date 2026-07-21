@@ -15,8 +15,23 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/user/store"
 )
+
+// tenantOf returns the tenant the request is authorized to act in, taken from
+// the authenticated principal — never from client input. Anonymous or
+// no-tenant callers get 401 and ok=false; the caller must return without
+// touching the store. This choke point keeps by-ID user operations (including
+// password resets) from crossing the tenant boundary.
+func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
+	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	if tid == "" {
+		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
+		return "", false
+	}
+	return tid, true
+}
 
 // Handler exposes the user CRUD HTTP surface.
 type Handler struct {
@@ -75,9 +90,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	tenant := r.URL.Query().Get("tenant_id")
-	if tenant == "" {
-		http.Error(w, "tenant_id query parameter is required", http.StatusBadRequest)
+	tenant, ok := tenantOf(w, r)
+	if !ok {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -91,7 +105,11 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request, id string) {
-	u, err := h.svc.Get(r.Context(), id)
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
+	u, err := h.svc.Get(r.Context(), tenant, id)
 	if errors.Is(err, store.ErrNotFound) {
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
@@ -104,11 +122,18 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	var u User
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+	// The tenant is authoritative from the request identity; a body-supplied
+	// tenant_id is ignored so a caller cannot create users in another tenant.
+	u.TenantID = tenant
 	if err := h.svc.Create(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -124,12 +149,17 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	var u User
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 	u.ID = id
+	u.TenantID = tenant
 	if err := h.svc.Update(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -147,7 +177,11 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request, id string) {
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(r.Context(), tenant, id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "user not found", http.StatusNotFound)
 			return

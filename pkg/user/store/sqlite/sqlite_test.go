@@ -64,7 +64,7 @@ func TestCRUDRoundTrip(t *testing.T) {
 		t.Fatal("Create should default timestamps")
 	}
 
-	got, err := s.Get(ctx, "u1")
+	got, err := s.Get(ctx, "tenant-1", "u1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestCRUDRoundTrip(t *testing.T) {
 	if err := s.Update(ctx, got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	after, err := s.Get(ctx, "u1")
+	after, err := s.Get(ctx, "tenant-1", "u1")
 	if err != nil {
 		t.Fatalf("Get after update: %v", err)
 	}
@@ -90,11 +90,48 @@ func TestCRUDRoundTrip(t *testing.T) {
 		t.Fatalf("Update should preserve PassHash, got %q", after.PassHash)
 	}
 
-	if err := s.Delete(ctx, "u1"); err != nil {
+	if err := s.Delete(ctx, "tenant-1", "u1"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := s.Get(ctx, "u1"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Get(ctx, "tenant-1", "u1"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Get after delete err = %v, want ErrNotFound", err)
+	}
+}
+
+// TestCrossTenantByIDIsDenied proves the tenant predicate on by-ID operations,
+// including the password-reset path: a user created in tenant-1 is invisible
+// and immutable to tenant-2 even when tenant-2 knows the exact user ID. This is
+// the regression guard for the v0.1.0 cross-tenant IDOR (read, delete, and
+// password reset).
+func TestCrossTenantByIDIsDenied(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	victim := user("victim-id", "victim@example.com", "victim")
+	victim.TenantID = "tenant-1"
+	if err := s.Create(ctx, victim); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := s.Get(ctx, "tenant-2", "victim-id"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant Get err = %v, want ErrNotFound", err)
+	}
+	if err := s.Delete(ctx, "tenant-2", "victim-id"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant Delete err = %v, want ErrNotFound", err)
+	}
+	// The password-reset IDOR: another tenant must not be able to rewrite the
+	// victim's credential by ID.
+	if err := s.UpdatePassHash(ctx, "tenant-2", "victim-id", "attacker-hash", time.Now().UTC()); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant UpdatePassHash err = %v, want ErrNotFound", err)
+	}
+
+	got, err := s.Get(ctx, "tenant-1", "victim-id")
+	if err != nil {
+		t.Fatalf("owner Get: %v", err)
+	}
+	if got.PassHash == "attacker-hash" {
+		t.Fatal("cross-tenant UpdatePassHash rewrote the victim's password")
 	}
 }
 
@@ -133,7 +170,7 @@ func TestGetByEmailAndUsername(t *testing.T) {
 func TestGetNotFound(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	if _, err := s.Get(context.Background(), "missing"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Get(context.Background(), "tenant-1", "missing"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Get(missing) err = %v, want ErrNotFound", err)
 	}
 }
@@ -228,10 +265,10 @@ func TestUpdatePassHash(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	at := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	if err := s.UpdatePassHash(ctx, "u1", "newhash", at); err != nil {
+	if err := s.UpdatePassHash(ctx, "tenant-1", "u1", "newhash", at); err != nil {
 		t.Fatalf("UpdatePassHash: %v", err)
 	}
-	got, err := s.Get(ctx, "u1")
+	got, err := s.Get(ctx, "tenant-1", "u1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -241,7 +278,7 @@ func TestUpdatePassHash(t *testing.T) {
 	if !got.UpdatedAt.Equal(at) {
 		t.Fatalf("UpdatedAt = %v, want %v", got.UpdatedAt, at)
 	}
-	if err := s.UpdatePassHash(ctx, "missing", "x", at); !errors.Is(err, store.ErrNotFound) {
+	if err := s.UpdatePassHash(ctx, "tenant-1", "missing", "x", at); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("UpdatePassHash(missing) err = %v, want ErrNotFound", err)
 	}
 }
@@ -258,7 +295,7 @@ func TestUpdateNotFound(t *testing.T) {
 func TestDeleteNotFound(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	if err := s.Delete(context.Background(), "ghost"); !errors.Is(err, store.ErrNotFound) {
+	if err := s.Delete(context.Background(), "tenant-1", "ghost"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Delete(ghost) err = %v, want ErrNotFound", err)
 	}
 }

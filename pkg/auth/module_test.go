@@ -67,10 +67,10 @@ func (f *fakeUserReader) add(u *user.User) {
 	}
 }
 
-func (f *fakeUserReader) Get(_ context.Context, id string) (*user.User, error) {
+func (f *fakeUserReader) Get(_ context.Context, tenantID, id string) (*user.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if u, ok := f.byID[id]; ok {
+	if u, ok := f.byID[id]; ok && u.TenantID == tenantID {
 		return u, nil
 	}
 	return nil, errors.New("user not found")

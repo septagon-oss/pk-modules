@@ -109,8 +109,8 @@ func (s *Store) Create(ctx context.Context, u *store.User) error {
 }
 
 // Get returns a user by ID.
-func (s *Store) Get(ctx context.Context, id string) (*store.User, error) {
-	row := s.db.QueryRowContext(ctx, selectColumns+` WHERE id = ?`, id)
+func (s *Store) Get(ctx context.Context, tenantID, id string) (*store.User, error) {
+	row := s.db.QueryRowContext(ctx, selectColumns+` WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	return scanUser(row)
 }
 
@@ -164,8 +164,8 @@ func (s *Store) Update(ctx context.Context, u *store.User) error {
 	u.UpdatedAt = time.Now().UTC()
 	res, err := s.db.ExecContext(
 		ctx,
-		`UPDATE users SET email = ?, username = ?, display_name = ?, active = ?, updated_at = ? WHERE id = ?`,
-		u.Email, u.Username, u.DisplayName, boolToInt(u.Active), u.UpdatedAt, u.ID,
+		`UPDATE users SET email = ?, username = ?, display_name = ?, active = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`,
+		u.Email, u.Username, u.DisplayName, boolToInt(u.Active), u.UpdatedAt, u.ID, u.TenantID,
 	)
 	if err != nil {
 		return classifyUniqueError(err)
@@ -177,15 +177,17 @@ func (s *Store) Update(ctx context.Context, u *store.User) error {
 	return nil
 }
 
-// UpdatePassHash rewrites the stored pass_hash for the given user.
-func (s *Store) UpdatePassHash(ctx context.Context, id, passHash string, updatedAt time.Time) error {
+// UpdatePassHash rewrites the stored pass_hash for the user identified by
+// (tenantID, id). The tenant predicate is mandatory so a caller cannot reset
+// another tenant's user's password by ID.
+func (s *Store) UpdatePassHash(ctx context.Context, tenantID, id, passHash string, updatedAt time.Time) error {
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()
 	}
 	res, err := s.db.ExecContext(
 		ctx,
-		`UPDATE users SET pass_hash = ?, updated_at = ? WHERE id = ?`,
-		passHash, updatedAt, id,
+		`UPDATE users SET pass_hash = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`,
+		passHash, updatedAt, id, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("user/sqlite: update pass_hash: %w", err)
@@ -197,9 +199,10 @@ func (s *Store) UpdatePassHash(ctx context.Context, id, passHash string, updated
 	return nil
 }
 
-// Delete removes a user by ID.
-func (s *Store) Delete(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+// Delete removes the user identified by (tenantID, id). The tenant predicate is
+// mandatory so a caller cannot delete another tenant's user by ID.
+func (s *Store) Delete(ctx context.Context, tenantID, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("user/sqlite: delete: %w", err)
 	}
