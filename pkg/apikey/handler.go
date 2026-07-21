@@ -25,7 +25,7 @@ import (
 // revoke) are scoped to this tenant; API-key *authentication* is a separate
 // path that resolves its own tenant from the presented key.
 func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
-	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	tid := strings.TrimSpace(identity.PrincipalFromContext(r.Context()).TenantID)
 	if tid == "" {
 		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
 		return "", false

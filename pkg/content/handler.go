@@ -25,7 +25,7 @@ import (
 // touching the store. This is the single choke point that keeps by-ID
 // operations from crossing the tenant boundary.
 func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
-	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	tid := strings.TrimSpace(identity.PrincipalFromContext(r.Context()).TenantID)
 	if tid == "" {
 		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
 		return "", false

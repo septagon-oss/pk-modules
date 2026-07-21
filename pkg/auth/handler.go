@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/auth/store"
 )
 
@@ -101,6 +102,15 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) validate(w http.ResponseWriter, r *http.Request, id string) {
+	// A session is a bearer secret; only its owner may read its metadata.
+	// Anonymous callers and callers asking about a session that is not theirs
+	// get an indistinguishable response, closing the unauthenticated session
+	// oracle.
+	p := identity.PrincipalFromContext(r.Context())
+	if p.IsAnonymous() {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	sess, err := h.svc.ValidateSession(r.Context(), id)
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -113,10 +123,28 @@ func (h *Handler) validate(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, err.Error(), status)
 		return
 	}
+	if sess.UserID != p.Subject {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
 	writeJSON(w, http.StatusOK, sess)
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request, id string) {
+	// Only the session's owner may revoke it. The mutation gate already blocks
+	// anonymous DELETEs; this is the ownership check that stops an authenticated
+	// caller from force-revoking another user's session by ID. A session that is
+	// already dead (not found/expired/revoked) is a harmless idempotent no-op,
+	// so we only enforce ownership for a live session.
+	p := identity.PrincipalFromContext(r.Context())
+	if p.IsAnonymous() {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if sess, verr := h.svc.ValidateSession(r.Context(), id); verr == nil && sess.UserID != p.Subject {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
 	if err := h.svc.Logout(r.Context(), id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "session not found", http.StatusNotFound)

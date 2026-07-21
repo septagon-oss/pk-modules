@@ -26,10 +26,14 @@ import (
 
 const modulePkgPrefix = "github.com/septagon-oss/pk-modules/pkg/"
 
-// storeImport matches another module's concrete store package:
+// implImport matches another module's concrete implementation package. It
+// covers the canonical `/store[/...]` layout plus the common alternative impl
+// directory names, so the guard enforces the architecture rather than a single
+// naming convention: a sibling's implementation is off-limits whatever it is
+// called.
 //
-//	github.com/septagon-oss/pk-modules/pkg/<module>/store[/...]
-var storeImport = regexp.MustCompile(`^github\.com/septagon-oss/pk-modules/pkg/([^/]+)/store(?:/.*)?$`)
+//	github.com/septagon-oss/pk-modules/pkg/<module>/{store|sqlite|storage|persistence|internal}[/...]
+var implImport = regexp.MustCompile(`^github\.com/septagon-oss/pk-modules/pkg/([^/]+)/(?:store|sqlite|storage|persistence|internal)(?:/.*)?$`)
 
 // TestNoCrossModuleStoreImports asserts that no package under pkg/<module>/
 // imports another module's /store implementation package. Importing your own
@@ -78,7 +82,7 @@ func TestNoCrossModuleStoreImports(t *testing.T) {
 			if err != nil {
 				continue
 			}
-			m := storeImport.FindStringSubmatch(ip)
+			m := implImport.FindStringSubmatch(ip)
 			if m == nil {
 				continue
 			}

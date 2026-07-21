@@ -16,6 +16,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -23,6 +25,7 @@ import (
 	"time"
 
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
 
 	"github.com/septagon-oss/pk-modules/pkg/auth"
@@ -340,6 +343,61 @@ func TestValidateRevokedSessionFails(t *testing.T) {
 	_, err = m.Service().ValidateSession(context.Background(), sess.ID)
 	if !errors.Is(err, auth.ErrSessionRevoked) {
 		t.Fatalf("ValidateSession err = %v, want ErrSessionRevoked", err)
+	}
+}
+
+// TestSessionHandlerSelfOwnership is the v0.2.1 regression for the session
+// oracle / forced-logout finding: GET and DELETE on /api/v1/auth/sessions/{id}
+// must be limited to the session's owner. An anonymous caller is 401; an
+// authenticated caller asking about someone else's session gets 404; only the
+// owner sees or revokes it.
+func TestSessionHandlerSelfOwnership(t *testing.T) {
+	t.Parallel()
+	m, reader, hasher := newModule(t)
+	reader.add(makeUserWithPassword(t, hasher, "t-1", "u-1", "alice@example.test", "pw-alice-123", true))
+	reader.add(makeUserWithPassword(t, hasher, "t-1", "u-2", "bob@example.test", "pw-bob-12345", true))
+	ctx := context.Background()
+
+	victim, err := m.Service().Login(ctx, "t-1", auth.Credentials{Email: "alice@example.test", Password: "pw-alice-123"})
+	if err != nil {
+		t.Fatalf("login alice: %v", err)
+	}
+
+	do := func(method, subject string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, auth.APIPath+"/"+victim.ID, nil)
+		if subject != "" {
+			req = req.WithContext(identity.ContextWithPrincipal(req.Context(),
+				identity.Principal{Subject: subject, TenantID: "t-1", AuthMethod: "session"}))
+		}
+		rec := httptest.NewRecorder()
+		m.HTTPHandler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	// GET: anonymous → 401; another user → 404; owner → 200.
+	if rec := do(http.MethodGet, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous validate = %d, want 401", rec.Code)
+	}
+	if rec := do(http.MethodGet, "u-2"); rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-user validate = %d, want 404 (session oracle must be closed)", rec.Code)
+	}
+	if rec := do(http.MethodGet, "u-1"); rec.Code != http.StatusOK {
+		t.Fatalf("owner validate = %d, want 200", rec.Code)
+	}
+
+	// DELETE: anonymous → 401; another user → 404 and the session survives.
+	if rec := do(http.MethodDelete, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous logout = %d, want 401", rec.Code)
+	}
+	if rec := do(http.MethodDelete, "u-2"); rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-user logout = %d, want 404 (forced logout must be blocked)", rec.Code)
+	}
+	if _, err := m.Service().ValidateSession(ctx, victim.ID); err != nil {
+		t.Fatalf("victim session was revoked by a non-owner: %v", err)
+	}
+	// Owner can revoke.
+	if rec := do(http.MethodDelete, "u-1"); rec.Code != http.StatusNoContent {
+		t.Fatalf("owner logout = %d, want 204", rec.Code)
 	}
 }
 

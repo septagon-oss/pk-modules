@@ -27,7 +27,7 @@ import (
 // internally (seed provisioning, user_management validating a tenant_id) with
 // arbitrary tenant IDs. The authorization boundary is here, at the HTTP edge.
 func callerTenant(w http.ResponseWriter, r *http.Request) (string, bool) {
-	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	tid := strings.TrimSpace(identity.PrincipalFromContext(r.Context()).TenantID)
 	if tid == "" {
 		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
 		return "", false

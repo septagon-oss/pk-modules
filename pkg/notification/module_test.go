@@ -6,19 +6,71 @@ package notification_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 
 	"github.com/septagon-oss/pk-modules/pkg/notification"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
 
 	_ "modernc.org/sqlite"
 )
+
+// TestNotificationReadIsSelfOnly is the v0.2.1 regression for the same-tenant
+// cross-user IDOR: the read handler must use the authenticated principal's own
+// user, never a client-supplied user_id. Alice, spoofing ?user_id=u-bob, must
+// still see only her own notifications; an anonymous read is 401.
+func TestNotificationReadIsSelfOnly(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	for _, n := range []portslib.Notification{
+		{TenantID: "t-1", UserID: "u-alice", Title: "for-alice", Body: "x", Category: "system", Severity: "info"},
+		{TenantID: "t-1", UserID: "u-bob", Title: "for-bob", Body: "x", Category: "system", Severity: "info"},
+	} {
+		if err := m.Service().Create(ctx, &n); err != nil {
+			t.Fatalf("seed notification: %v", err)
+		}
+	}
+
+	// Alice reads, spoofing bob's user_id in the query — must be ignored.
+	req := httptest.NewRequest(http.MethodGet, notification.APIPath+"?user_id=u-bob", nil)
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(),
+		identity.Principal{Subject: "u-alice", TenantID: "t-1", AuthMethod: "session"}))
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("read = %d, want 200", rec.Code)
+	}
+	var got []portslib.Notification
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v (body=%s)", err, rec.Body.String())
+	}
+	for _, n := range got {
+		if n.UserID != "u-alice" {
+			t.Fatalf("cross-user read leaked %q's notification to alice", n.UserID)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("alice should see exactly her 1 notification, got %d", len(got))
+	}
+
+	// Anonymous read is rejected.
+	anon := httptest.NewRequest(http.MethodGet, notification.APIPath, nil)
+	arec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(arec, anon)
+	if arec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous notification read = %d, want 401", arec.Code)
+	}
+}
 
 func sqliteDSN(t *testing.T) string {
 	t.Helper()

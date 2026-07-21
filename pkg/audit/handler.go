@@ -11,6 +11,7 @@ package audit
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"strconv"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 // no-tenant callers get 401. Audit reads and writes are confined to this
 // tenant, so no caller can read or forge another tenant's audit trail.
 func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
-	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	tid := strings.TrimSpace(identity.PrincipalFromContext(r.Context()).TenantID)
 	if tid == "" {
 		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
 		return "", false

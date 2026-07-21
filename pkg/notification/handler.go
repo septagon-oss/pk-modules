@@ -24,7 +24,7 @@ import (
 // operations are confined to this tenant, so no caller can reach another
 // tenant's notifications or subscriptions by ID.
 func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
-	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	tid := strings.TrimSpace(identity.PrincipalFromContext(r.Context()).TenantID)
 	if tid == "" {
 		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
 		return "", false
@@ -63,7 +63,14 @@ func (h *Handler) serveNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		userID := r.URL.Query().Get("user_id")
+		// A caller reads only its OWN notifications. The user comes from the
+		// authenticated principal, never a client-supplied user_id — otherwise
+		// any user could read a tenant-mate's notifications by passing their id.
+		userID := strings.TrimSpace(identity.PrincipalFromContext(r.Context()).Subject)
+		if userID == "" {
+			http.Error(w, "unauthorized: no subject in request identity", http.StatusUnauthorized)
+			return
+		}
 		limit := parseIntDefault(r.URL.Query().Get("limit"), 0)
 		offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
 		got, err := h.svc.GetByUser(r.Context(), tenant, userID, limit, offset)
