@@ -13,7 +13,22 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 )
+
+// tenantOf returns the tenant the request is authorized to act in, taken from
+// the authenticated principal — never from client input. Anonymous or
+// no-tenant callers get 401. Audit reads and writes are confined to this
+// tenant, so no caller can read or forge another tenant's audit trail.
+func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
+	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	if tid == "" {
+		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
+		return "", false
+	}
+	return tid, true
+}
 
 // Handler exposes the audit HTTP surface.
 type Handler struct {
@@ -45,9 +60,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
 	filter := QueryFilter{
-		TenantID: q.Get("tenant_id"),
+		TenantID: tenant, // authoritative from identity, never the query string
 		Actor:    q.Get("actor"),
 		Action:   q.Get("action"),
 	}
@@ -91,11 +110,18 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) record(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	var e Event
 	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+	// The event is stamped with the caller's tenant; a body-supplied tenant_id
+	// is ignored so a caller cannot forge audit events into another tenant.
+	e.TenantID = tenant
 	if err := h.svc.Record(r.Context(), &e); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

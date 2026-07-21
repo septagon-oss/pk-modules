@@ -121,14 +121,17 @@ func (s *Store) Query(ctx context.Context, f store.QueryFilter) ([]*store.Event,
 		limit = maxLimit
 	}
 
-	var (
-		clauses []string
-		args    []any
-	)
-	if f.TenantID != "" {
-		clauses = append(clauses, "tenant_id = ?")
-		args = append(args, f.TenantID)
+	// Tenant scoping is mandatory on reads: an unscoped query must never return
+	// another tenant's audit events. An empty tenant fails closed (no rows)
+	// rather than returning the whole log.
+	if strings.TrimSpace(f.TenantID) == "" {
+		return nil, nil
 	}
+
+	var (
+		clauses = []string{"tenant_id = ?"}
+		args    = []any{f.TenantID}
+	)
 	if f.Actor != "" {
 		clauses = append(clauses, "actor = ?")
 		args = append(args, f.Actor)

@@ -118,7 +118,7 @@ func (s *Store) Create(ctx context.Context, n *store.Notification) error {
 }
 
 // GetByUser returns notifications for a user ordered by emitted_at DESC.
-func (s *Store) GetByUser(ctx context.Context, userID string, limit, offset int) ([]*store.Notification, error) {
+func (s *Store) GetByUser(ctx context.Context, tenantID, userID string, limit, offset int) ([]*store.Notification, error) {
 	const defaultLimit = 100
 	const maxLimit = 1000
 	if limit <= 0 {
@@ -132,8 +132,8 @@ func (s *Store) GetByUser(ctx context.Context, userID string, limit, offset int)
 	}
 	rows, err := s.db.QueryContext(
 		ctx,
-		selectNotificationColumns+` WHERE user_id = ? ORDER BY emitted_at DESC LIMIT ? OFFSET ?`,
-		userID, limit, offset,
+		selectNotificationColumns+` WHERE tenant_id = ? AND user_id = ? ORDER BY emitted_at DESC LIMIT ? OFFSET ?`,
+		tenantID, userID, limit, offset,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("notification/sqlite: get by user: %w", err)
@@ -153,15 +153,17 @@ func (s *Store) GetByUser(ctx context.Context, userID string, limit, offset int)
 	return out, nil
 }
 
-// MarkRead sets the read_at timestamp for the given notification.
-func (s *Store) MarkRead(ctx context.Context, id string, at time.Time) error {
+// MarkRead sets the read_at timestamp for the notification identified by
+// (tenantID, id). The tenant predicate is mandatory so a caller cannot mark
+// another tenant's notification read by ID.
+func (s *Store) MarkRead(ctx context.Context, tenantID, id string, at time.Time) error {
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
 	res, err := s.db.ExecContext(
 		ctx,
-		`UPDATE notifications SET read_at = ? WHERE id = ?`,
-		at, id,
+		`UPDATE notifications SET read_at = ? WHERE id = ? AND tenant_id = ?`,
+		at, id, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("notification/sqlite: mark read: %w", err)
@@ -198,11 +200,13 @@ func (s *Store) AddSubscription(ctx context.Context, sub *store.Subscription) er
 	return nil
 }
 
-// RemoveSubscription deletes a subscription row by ID.
-func (s *Store) RemoveSubscription(ctx context.Context, id string) error {
+// RemoveSubscription deletes the subscription identified by (tenantID, id). The
+// tenant predicate is mandatory so a caller cannot remove another tenant's
+// subscription by ID.
+func (s *Store) RemoveSubscription(ctx context.Context, tenantID, id string) error {
 	res, err := s.db.ExecContext(
 		ctx,
-		`DELETE FROM notification_subscriptions WHERE id = ?`, id,
+		`DELETE FROM notification_subscriptions WHERE id = ? AND tenant_id = ?`, id, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("notification/sqlite: remove subscription: %w", err)
@@ -214,12 +218,14 @@ func (s *Store) RemoveSubscription(ctx context.Context, id string) error {
 	return nil
 }
 
-// ListSubscriptions returns every subscription for the given user.
-func (s *Store) ListSubscriptions(ctx context.Context, userID string) ([]*store.Subscription, error) {
+// ListSubscriptions returns every subscription for the given (tenantID, userID).
+// The tenant predicate is mandatory so a caller cannot enumerate another
+// tenant's subscriptions.
+func (s *Store) ListSubscriptions(ctx context.Context, tenantID, userID string) ([]*store.Subscription, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		selectSubscriptionColumns+` WHERE user_id = ? ORDER BY created_at ASC`,
-		userID,
+		selectSubscriptionColumns+` WHERE tenant_id = ? AND user_id = ? ORDER BY created_at ASC`,
+		tenantID, userID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("notification/sqlite: list subscriptions: %w", err)

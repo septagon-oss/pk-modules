@@ -46,21 +46,23 @@ type Subscription struct {
 type Store interface {
 	// Create persists a new notification, defaulting EmittedAt when unset.
 	Create(ctx context.Context, n *Notification) error
-	// GetByUser returns a user's notifications ordered by emission time
-	// descending, paged by limit and offset.
-	GetByUser(ctx context.Context, userID string, limit, offset int) ([]*Notification, error)
-	// MarkRead records the read timestamp, returning ErrNotFound when no
-	// notification matches.
-	MarkRead(ctx context.Context, id string, at time.Time) error
+	// GetByUser returns a (tenant, user)'s notifications ordered by emission
+	// time descending, paged by limit and offset. The tenant predicate is
+	// mandatory so a caller cannot read another tenant's notifications.
+	GetByUser(ctx context.Context, tenantID, userID string, limit, offset int) ([]*Notification, error)
+	// MarkRead records the read timestamp for the notification identified by
+	// (tenantID, id), returning ErrNotFound when no notification matches in
+	// that tenant.
+	MarkRead(ctx context.Context, tenantID, id string, at time.Time) error
 
 	// AddSubscription persists a new subscription. Implementations return
 	// ErrDuplicate when the subscription ID is already in use.
 	AddSubscription(ctx context.Context, s *Subscription) error
-	// RemoveSubscription deletes a subscription, returning ErrNotFound when no
-	// subscription matches.
-	RemoveSubscription(ctx context.Context, id string) error
-	// ListSubscriptions returns every subscription for the given user.
-	ListSubscriptions(ctx context.Context, userID string) ([]*Subscription, error)
+	// RemoveSubscription deletes the subscription identified by (tenantID, id),
+	// returning ErrNotFound when no subscription matches in that tenant.
+	RemoveSubscription(ctx context.Context, tenantID, id string) error
+	// ListSubscriptions returns every subscription for the given (tenant, user).
+	ListSubscriptions(ctx context.Context, tenantID, userID string) ([]*Subscription, error)
 }
 
 // Sentinel errors returned by Store implementations.

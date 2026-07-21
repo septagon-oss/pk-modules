@@ -13,9 +13,24 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/notification/store"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
+
+// tenantOf returns the tenant the request is authorized to act in, taken from
+// the authenticated principal — never from client input. Anonymous or
+// no-tenant callers get 401. Notification reads, mark-read, and subscription
+// operations are confined to this tenant, so no caller can reach another
+// tenant's notifications or subscriptions by ID.
+func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
+	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	if tid == "" {
+		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
+		return "", false
+	}
+	return tid, true
+}
 
 // Handler exposes the notification HTTP surface.
 type Handler struct {
@@ -42,12 +57,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) serveNotifications(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		userID := r.URL.Query().Get("user_id")
 		limit := parseIntDefault(r.URL.Query().Get("limit"), 0)
 		offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
-		got, err := h.svc.GetByUser(r.Context(), userID, limit, offset)
+		got, err := h.svc.GetByUser(r.Context(), tenant, userID, limit, offset)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -59,6 +78,8 @@ func (h *Handler) serveNotifications(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
+		// The tenant is authoritative from the request identity.
+		n.TenantID = tenant
 		if err := h.svc.Create(r.Context(), &n); err != nil {
 			writeError(w, err)
 			return
@@ -70,6 +91,10 @@ func (h *Handler) serveNotifications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) serveNotificationItem(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	path := strings.TrimPrefix(r.URL.Path, APIPath+"/")
 	parts := strings.SplitN(path, "/", 2)
 	id := parts[0]
@@ -83,7 +108,7 @@ func (h *Handler) serveNotificationItem(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if err := h.svc.MarkRead(r.Context(), id); err != nil {
+		if err := h.svc.MarkRead(r.Context(), tenant, id); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -94,6 +119,10 @@ func (h *Handler) serveNotificationItem(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) serveSubscriptions(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		var sub Subscription
@@ -101,6 +130,8 @@ func (h *Handler) serveSubscriptions(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
 			return
 		}
+		// The tenant is authoritative from the request identity.
+		sub.TenantID = tenant
 		if err := h.svc.Subscribe(r.Context(), &sub); err != nil {
 			writeError(w, err)
 			return
@@ -112,12 +143,16 @@ func (h *Handler) serveSubscriptions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) serveSubscriptionItem(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	id := strings.TrimPrefix(r.URL.Path, SubscriptionAPIPath+"/")
 	if r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := h.svc.Unsubscribe(r.Context(), id); err != nil {
+	if err := h.svc.Unsubscribe(r.Context(), tenant, id); err != nil {
 		writeError(w, err)
 		return
 	}

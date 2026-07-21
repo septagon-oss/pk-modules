@@ -73,9 +73,9 @@ func (s *service) Create(ctx context.Context, n *portslib.Notification) error {
 	return nil
 }
 
-// GetByUser returns notifications for a user ordered newest-first.
-func (s *service) GetByUser(ctx context.Context, userID string, limit, offset int) ([]*portslib.Notification, error) {
-	rows, err := s.store.GetByUser(ctx, userID, limit, offset)
+// GetByUser returns notifications for a (tenant, user) ordered newest-first.
+func (s *service) GetByUser(ctx context.Context, tenantID, userID string, limit, offset int) ([]*portslib.Notification, error) {
+	rows, err := s.store.GetByUser(ctx, tenantID, userID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +86,10 @@ func (s *service) GetByUser(ctx context.Context, userID string, limit, offset in
 	return out, nil
 }
 
-// MarkRead sets read_at to now for the given notification.
-func (s *service) MarkRead(ctx context.Context, id string) error {
-	return s.store.MarkRead(ctx, id, time.Now().UTC())
+// MarkRead sets read_at to now for the notification identified by
+// (tenantID, id). A notification in another tenant is reported as ErrNotFound.
+func (s *service) MarkRead(ctx context.Context, tenantID, id string) error {
+	return s.store.MarkRead(ctx, tenantID, id, time.Now().UTC())
 }
 
 // Subscribe persists a subscription row.
@@ -105,9 +106,10 @@ func (s *service) Subscribe(ctx context.Context, sub *Subscription) error {
 	return s.store.AddSubscription(ctx, subToStore(sub))
 }
 
-// Unsubscribe removes a subscription by ID.
-func (s *service) Unsubscribe(ctx context.Context, subscriptionID string) error {
-	return s.store.RemoveSubscription(ctx, subscriptionID)
+// Unsubscribe removes the subscription identified by (tenantID, id). A
+// subscription in another tenant is reported as ErrNotFound.
+func (s *service) Unsubscribe(ctx context.Context, tenantID, subscriptionID string) error {
+	return s.store.RemoveSubscription(ctx, tenantID, subscriptionID)
 }
 
 // emit fans a notification dispatch event to the optional audit emitter.

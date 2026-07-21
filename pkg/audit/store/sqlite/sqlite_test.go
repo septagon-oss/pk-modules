@@ -102,7 +102,7 @@ func TestQueryOrdersChronologically(t *testing.T) {
 	if err := s.Append(ctx, event("b", base.Add(time.Hour))); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Query(ctx, store.QueryFilter{})
+	got, err := s.Query(ctx, store.QueryFilter{TenantID: "tenant-1"})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -139,19 +139,25 @@ func TestQueryFilters(t *testing.T) {
 		}
 	}
 
+	// Every query is tenant-scoped: a filter must name a tenant, and results
+	// never cross the tenant boundary. Counts are within-tenant.
 	cases := []struct {
 		name   string
 		filter store.QueryFilter
 		wantN  int
 	}{
-		{"tenant", store.QueryFilter{TenantID: "t1"}, 2},
-		{"actor", store.QueryFilter{Actor: "alice"}, 2},
-		{"action", store.QueryFilter{Action: "login"}, 2},
-		{"tenant+actor", store.QueryFilter{TenantID: "t1", Actor: "alice"}, 1},
-		{"since", store.QueryFilter{Since: base.Add(time.Hour)}, 2},
-		{"until", store.QueryFilter{Until: base.Add(time.Hour)}, 1},
-		{"window", store.QueryFilter{Since: base.Add(time.Hour), Until: base.Add(2 * time.Hour)}, 1},
-		{"none-match", store.QueryFilter{Actor: "carol"}, 0},
+		{"tenant t1", store.QueryFilter{TenantID: "t1"}, 2},
+		{"tenant t2", store.QueryFilter{TenantID: "t2"}, 1},
+		{"actor within t1", store.QueryFilter{TenantID: "t1", Actor: "alice"}, 1},
+		{"action within t1", store.QueryFilter{TenantID: "t1", Action: "login"}, 1},
+		{"since within t1", store.QueryFilter{TenantID: "t1", Since: base.Add(time.Hour)}, 1},
+		{"until within t1", store.QueryFilter{TenantID: "t1", Until: base.Add(time.Hour)}, 1},
+		{"window within t1", store.QueryFilter{TenantID: "t1", Since: base.Add(time.Hour), Until: base.Add(2 * time.Hour)}, 1},
+		{"none-match within t1", store.QueryFilter{TenantID: "t1", Actor: "carol"}, 0},
+		// Cross-tenant isolation: t2's actor "alice" event is invisible to t1.
+		{"other tenant actor invisible", store.QueryFilter{TenantID: "t1", Actor: "alice", Action: "login"}, 1},
+		// Fail closed: an unscoped query returns nothing, never the whole log.
+		{"empty tenant fails closed", store.QueryFilter{}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -176,7 +182,7 @@ func TestQueryLimitCap(t *testing.T) {
 			t.Fatalf("Append: %v", err)
 		}
 	}
-	got, err := s.Query(ctx, store.QueryFilter{Limit: 2})
+	got, err := s.Query(ctx, store.QueryFilter{TenantID: "tenant-1", Limit: 2})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}

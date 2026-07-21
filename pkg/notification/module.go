@@ -139,7 +139,8 @@ func registerHealth(r portslib.HealthRegistrar, st store.Store) error {
 		return nil
 	}
 	checker := health.CheckerFunc(func(ctx context.Context) error {
-		_, err := st.GetByUser(ctx, "_health_probe_", 1, 0)
+		// Probe values only exercise the query path; they match no rows.
+		_, err := st.GetByUser(ctx, "_health_probe_", "_health_probe_", 1, 0)
 		return err
 	})
 	return r.Register("notification_management.store", checker)

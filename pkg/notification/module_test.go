@@ -95,7 +95,7 @@ func TestCreatePersistsNotification(t *testing.T) {
 	if n.EmittedAt.IsZero() {
 		t.Fatalf("Create did not set EmittedAt")
 	}
-	got, err := m.Service().GetByUser(ctx, "u-1", 0, 0)
+	got, err := m.Service().GetByUser(ctx, "t-1", "u-1", 0, 0)
 	if err != nil {
 		t.Fatalf("GetByUser: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestGetByUserOrdersByEmittedAt(t *testing.T) {
 			t.Fatalf("Create %d: %v", i, err)
 		}
 	}
-	got, err := m.Service().GetByUser(ctx, "u-1", 0, 0)
+	got, err := m.Service().GetByUser(ctx, "t-1", "u-1", 0, 0)
 	if err != nil {
 		t.Fatalf("GetByUser: %v", err)
 	}
@@ -178,10 +178,10 @@ func TestMarkRead(t *testing.T) {
 	if err := m.Service().Create(ctx, n); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := m.Service().MarkRead(ctx, n.ID); err != nil {
+	if err := m.Service().MarkRead(ctx, "t-1", n.ID); err != nil {
 		t.Fatalf("MarkRead: %v", err)
 	}
-	if err := m.Service().MarkRead(ctx, "missing"); err == nil {
+	if err := m.Service().MarkRead(ctx, "t-1", "missing"); err == nil {
 		t.Fatalf("MarkRead on missing ID should error")
 	}
 }
@@ -202,10 +202,10 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 	if sub.ID == "" {
 		t.Fatalf("Subscribe did not assign ID")
 	}
-	if err := m.Service().Unsubscribe(ctx, sub.ID); err != nil {
+	if err := m.Service().Unsubscribe(ctx, "t-1", sub.ID); err != nil {
 		t.Fatalf("Unsubscribe: %v", err)
 	}
-	if err := m.Service().Unsubscribe(ctx, sub.ID); err == nil {
+	if err := m.Service().Unsubscribe(ctx, "t-1", sub.ID); err == nil {
 		t.Fatalf("second Unsubscribe should return ErrNotFound")
 	}
 }

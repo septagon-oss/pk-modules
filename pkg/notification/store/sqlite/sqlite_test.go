@@ -52,6 +52,50 @@ func TestNewRejectsNilDB(t *testing.T) {
 	}
 }
 
+// TestCrossTenantIsDenied proves the tenant predicate on notification and
+// subscription reads/mutations: tenant-2 cannot read tenant-1's notifications,
+// mark them read, or remove tenant-1's subscription, even with exact IDs.
+func TestCrossTenantIsDenied(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	n := notif("n1", "user-1", time.Now().UTC()) // tenant-1
+	if err := s.Create(ctx, n); err != nil {
+		t.Fatalf("Create notification: %v", err)
+	}
+	sub := &store.Subscription{ID: "sub1", TenantID: "tenant-1", UserID: "user-1", Channel: "in-app"}
+	if err := s.AddSubscription(ctx, sub); err != nil {
+		t.Fatalf("AddSubscription: %v", err)
+	}
+
+	// Reads scoped to another tenant see nothing.
+	if got, err := s.GetByUser(ctx, "tenant-2", "user-1", 0, 0); err != nil || len(got) != 0 {
+		t.Fatalf("cross-tenant GetByUser = %v, %v; want 0 rows, nil", got, err)
+	}
+	if got, err := s.ListSubscriptions(ctx, "tenant-2", "user-1"); err != nil || len(got) != 0 {
+		t.Fatalf("cross-tenant ListSubscriptions = %v, %v; want 0 rows, nil", got, err)
+	}
+	// Mutations scoped to another tenant are denied (ErrNotFound), leaving the
+	// owner's rows intact.
+	if err := s.MarkRead(ctx, "tenant-2", "n1", time.Now().UTC()); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant MarkRead err = %v, want ErrNotFound", err)
+	}
+	if err := s.RemoveSubscription(ctx, "tenant-2", "sub1"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant RemoveSubscription err = %v, want ErrNotFound", err)
+	}
+
+	// The owner still sees an unread notification and a live subscription.
+	own, err := s.GetByUser(ctx, "tenant-1", "user-1", 0, 0)
+	if err != nil || len(own) != 1 || own[0].ReadAt != nil {
+		t.Fatalf("owner notification = %v, %v; want 1 unread", own, err)
+	}
+	subs, err := s.ListSubscriptions(ctx, "tenant-1", "user-1")
+	if err != nil || len(subs) != 1 {
+		t.Fatalf("owner subscriptions = %v, %v; want 1", subs, err)
+	}
+}
+
 func TestCreateThenGetByUser(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
@@ -65,7 +109,7 @@ func TestCreateThenGetByUser(t *testing.T) {
 		t.Fatal("Create should default EmittedAt")
 	}
 
-	got, err := s.GetByUser(ctx, "user-1", 0, 0)
+	got, err := s.GetByUser(ctx, "tenant-1", "user-1", 0, 0)
 	if err != nil {
 		t.Fatalf("GetByUser: %v", err)
 	}
@@ -90,7 +134,7 @@ func TestEmptyNullableColumns(t *testing.T) {
 	if err := s.Create(ctx, n); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	got, err := s.GetByUser(ctx, "user-1", 0, 0)
+	got, err := s.GetByUser(ctx, "tenant-1", "user-1", 0, 0)
 	if err != nil {
 		t.Fatalf("GetByUser: %v", err)
 	}
@@ -114,7 +158,7 @@ func TestGetByUserOrderedAndScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.GetByUser(ctx, "user-1", 0, 0)
+	got, err := s.GetByUser(ctx, "tenant-1", "user-1", 0, 0)
 	if err != nil {
 		t.Fatalf("GetByUser: %v", err)
 	}
@@ -126,7 +170,7 @@ func TestGetByUserOrderedAndScoped(t *testing.T) {
 	}
 
 	// Pagination.
-	page, err := s.GetByUser(ctx, "user-1", 1, 1)
+	page, err := s.GetByUser(ctx, "tenant-1", "user-1", 1, 1)
 	if err != nil {
 		t.Fatalf("GetByUser page: %v", err)
 	}
@@ -143,17 +187,17 @@ func TestMarkRead(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	at := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	if err := s.MarkRead(ctx, "n1", at); err != nil {
+	if err := s.MarkRead(ctx, "tenant-1", "n1", at); err != nil {
 		t.Fatalf("MarkRead: %v", err)
 	}
-	got, err := s.GetByUser(ctx, "user-1", 0, 0)
+	got, err := s.GetByUser(ctx, "tenant-1", "user-1", 0, 0)
 	if err != nil {
 		t.Fatalf("GetByUser: %v", err)
 	}
 	if got[0].ReadAt == nil || !got[0].ReadAt.Equal(at) {
 		t.Fatalf("ReadAt = %v, want %v", got[0].ReadAt, at)
 	}
-	if err := s.MarkRead(ctx, "missing", at); !errors.Is(err, store.ErrNotFound) {
+	if err := s.MarkRead(ctx, "tenant-1", "missing", at); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("MarkRead(missing) err = %v, want ErrNotFound", err)
 	}
 }
@@ -176,7 +220,7 @@ func TestSubscriptionLifecycle(t *testing.T) {
 		t.Fatalf("AddSubscription (no category): %v", err)
 	}
 
-	list, err := s.ListSubscriptions(ctx, "user-1")
+	list, err := s.ListSubscriptions(ctx, "tenant-1", "user-1")
 	if err != nil {
 		t.Fatalf("ListSubscriptions: %v", err)
 	}
@@ -184,10 +228,10 @@ func TestSubscriptionLifecycle(t *testing.T) {
 		t.Fatalf("ListSubscriptions returned %d, want 2", len(list))
 	}
 
-	if err := s.RemoveSubscription(ctx, "sub1"); err != nil {
+	if err := s.RemoveSubscription(ctx, "tenant-1", "sub1"); err != nil {
 		t.Fatalf("RemoveSubscription: %v", err)
 	}
-	list, err = s.ListSubscriptions(ctx, "user-1")
+	list, err = s.ListSubscriptions(ctx, "tenant-1", "user-1")
 	if err != nil {
 		t.Fatalf("ListSubscriptions after remove: %v", err)
 	}
@@ -198,7 +242,7 @@ func TestSubscriptionLifecycle(t *testing.T) {
 		t.Fatalf("empty category should round-trip empty: %q", list[0].Category)
 	}
 
-	if err := s.RemoveSubscription(ctx, "missing"); !errors.Is(err, store.ErrNotFound) {
+	if err := s.RemoveSubscription(ctx, "tenant-1", "missing"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("RemoveSubscription(missing) err = %v, want ErrNotFound", err)
 	}
 }

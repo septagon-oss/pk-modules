@@ -15,11 +15,19 @@ import (
 	"time"
 
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 
 	"github.com/septagon-oss/pk-modules/pkg/audit"
 
 	_ "modernc.org/sqlite"
 )
+
+// withTenant attaches an authenticated principal scoped to tenantID so handler
+// tests exercise the authorized path (the audit surface requires a tenant).
+func withTenant(r *http.Request, tenantID string) *http.Request {
+	return r.WithContext(identity.ContextWithPrincipal(r.Context(),
+		identity.Principal{Subject: "u", TenantID: tenantID, AuthMethod: "session"}))
+}
 
 func sqliteDSN(t *testing.T) string {
 	t.Helper()
@@ -305,7 +313,7 @@ func TestHandlerListRejectsMalformedQueryParams(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			req := httptest.NewRequest(http.MethodGet, tc.raw, nil)
+			req := withTenant(httptest.NewRequest(http.MethodGet, tc.raw, nil), "t-1")
 			rec := httptest.NewRecorder()
 			m.HTTPHandler().ServeHTTP(rec, req)
 			if rec.Code != http.StatusBadRequest {
@@ -318,13 +326,27 @@ func TestHandlerListRejectsMalformedQueryParams(t *testing.T) {
 func TestHandlerListAcceptsValidQueryParams(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
-	req := httptest.NewRequest(http.MethodGet,
-		"/api/v1/audit-events?tenant_id=t-1&since=2026-01-01T00:00:00Z&until=2027-01-01T00:00:00Z&limit=10",
-		nil)
+	req := withTenant(httptest.NewRequest(http.MethodGet,
+		"/api/v1/audit-events?since=2026-01-01T00:00:00Z&until=2027-01-01T00:00:00Z&limit=10",
+		nil), "t-1")
 	rec := httptest.NewRecorder()
 	m.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestHandlerListRequiresTenant proves the audit read surface rejects an
+// anonymous (no-principal) request with 401 before it touches the store, so an
+// unauthenticated caller can never read any tenant's audit trail.
+func TestHandlerListRequiresTenant(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit-events", nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous audit query = %d, want 401", rec.Code)
 	}
 }
 
