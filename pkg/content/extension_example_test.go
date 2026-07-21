@@ -59,7 +59,7 @@ func TestProEmbeddingCompiles(t *testing.T) {
 	if err := pro.Service().Create(ctx, in); err != nil {
 		t.Fatalf("pro.Service().Create: %v", err)
 	}
-	if err := pro.Publisher().Publish(ctx, in.ID); err != nil {
+	if err := pro.Publisher().Publish(ctx, "t-pro", in.ID); err != nil {
 		t.Fatalf("pro.Publisher().Publish: %v", err)
 	}
 	got, err := pro.Reader().GetBySlug(ctx, "t-pro", content.KindPost, "pro-launch")

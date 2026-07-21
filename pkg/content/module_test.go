@@ -76,7 +76,7 @@ func TestCreateAndGet(t *testing.T) {
 	if in.BodyFormat != content.BodyFormatMarkdown {
 		t.Fatalf("BodyFormat default = %q, want markdown", in.BodyFormat)
 	}
-	got, err := m.Service().Get(ctx, in.ID)
+	got, err := m.Service().Get(ctx, "t-1", in.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestUpdatePreservesCreatedAt(t *testing.T) {
 	if err := m.Service().Update(ctx, in); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	got, err := m.Service().Get(ctx, in.ID)
+	got, err := m.Service().Get(ctx, "t-1", in.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -216,10 +216,10 @@ func TestPublishSetsPublishedAt(t *testing.T) {
 	if in.PublishedAt != nil {
 		t.Fatalf("PublishedAt should default to nil for drafts")
 	}
-	if err := m.Publisher().Publish(ctx, in.ID); err != nil {
+	if err := m.Publisher().Publish(ctx, "t-1", in.ID); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	got, err := m.Service().Get(ctx, in.ID)
+	got, err := m.Service().Get(ctx, "t-1", in.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -243,13 +243,13 @@ func TestUnpublishClearsPublishedAt(t *testing.T) {
 	if err := m.Service().Create(ctx, in); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := m.Publisher().Publish(ctx, in.ID); err != nil {
+	if err := m.Publisher().Publish(ctx, "t-1", in.ID); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	if err := m.Publisher().Unpublish(ctx, in.ID); err != nil {
+	if err := m.Publisher().Unpublish(ctx, "t-1", in.ID); err != nil {
 		t.Fatalf("Unpublish: %v", err)
 	}
-	got, err := m.Service().Get(ctx, in.ID)
+	got, err := m.Service().Get(ctx, "t-1", in.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

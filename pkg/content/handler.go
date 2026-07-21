@@ -14,8 +14,24 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/content/store"
 )
+
+// tenantOf returns the tenant the request is authorized to act in, taken from
+// the authenticated principal on the context — never from client-supplied
+// input. When the principal carries no tenant (anonymous or cross-tenant
+// caller) it writes 401 and reports ok=false; callers must return without
+// touching the store. This is the single choke point that keeps by-ID
+// operations from crossing the tenant boundary.
+func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
+	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	if tid == "" {
+		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
+		return "", false
+	}
+	return tid, true
+}
 
 // Handler exposes the content HTTP surface.
 type Handler struct {
@@ -90,8 +106,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
-	tenantID := q.Get("tenant_id")
 	kind := q.Get("kind")
 	limit := parseIntDefault(q.Get("limit"), 0)
 	offset := parseIntDefault(q.Get("offset"), 0)
@@ -104,11 +123,18 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	var c Content
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+	// The tenant is authoritative from the request identity; a body-supplied
+	// tenant_id is ignored so a caller cannot create rows in another tenant.
+	c.TenantID = tenantID
 	if err := h.svc.Create(r.Context(), &c); err != nil {
 		writeError(w, err)
 		return
@@ -117,7 +143,11 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request, id string) {
-	c, err := h.svc.Get(r.Context(), id)
+	tenantID, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
+	c, err := h.svc.Get(r.Context(), tenantID, id)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -126,12 +156,17 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
+	tenantID, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	var c Content
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 	c.ID = id
+	c.TenantID = tenantID
 	if err := h.svc.Update(r.Context(), &c); err != nil {
 		writeError(w, err)
 		return
@@ -140,7 +175,11 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request, id string) {
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	tenantID, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Delete(r.Context(), tenantID, id); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -148,7 +187,11 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) publish(w http.ResponseWriter, r *http.Request, id string) {
-	if err := h.svc.Publish(r.Context(), id); err != nil {
+	tenantID, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Publish(r.Context(), tenantID, id); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -156,7 +199,11 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) unpublish(w http.ResponseWriter, r *http.Request, id string) {
-	if err := h.svc.Unpublish(r.Context(), id); err != nil {
+	tenantID, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Unpublish(r.Context(), tenantID, id); err != nil {
 		writeError(w, err)
 		return
 	}

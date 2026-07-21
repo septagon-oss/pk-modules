@@ -65,7 +65,7 @@ func TestCRUDRoundTrip(t *testing.T) {
 		t.Fatal("Create should default CreatedAt/UpdatedAt")
 	}
 
-	got, err := s.Get(ctx, "c1")
+	got, err := s.Get(ctx, "tenant-1", "c1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestCRUDRoundTrip(t *testing.T) {
 	if err := s.Update(ctx, got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	after, err := s.Get(ctx, "c1")
+	after, err := s.Get(ctx, "tenant-1", "c1")
 	if err != nil {
 		t.Fatalf("Get after update: %v", err)
 	}
@@ -89,11 +89,57 @@ func TestCRUDRoundTrip(t *testing.T) {
 		t.Fatal("Update should preserve CreatedAt")
 	}
 
-	if err := s.Delete(ctx, "c1"); err != nil {
+	if err := s.Delete(ctx, "tenant-1", "c1"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := s.Get(ctx, "c1"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Get(ctx, "tenant-1", "c1"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Get after delete err = %v, want ErrNotFound", err)
+	}
+}
+
+// TestCrossTenantByIDIsDenied proves the tenant predicate on by-ID operations:
+// a row created in tenant-1 is invisible and immutable to tenant-2 even when
+// tenant-2 knows the exact row ID. This is the regression guard for the
+// v0.1.0 cross-tenant IDOR.
+func TestCrossTenantByIDIsDenied(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	in := content("shared-id", "victim")
+	in.TenantID = "tenant-1"
+	if err := s.Create(ctx, in); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Read across tenants → ErrNotFound, never the row.
+	if _, err := s.Get(ctx, "tenant-2", "shared-id"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant Get err = %v, want ErrNotFound", err)
+	}
+	// Delete across tenants → ErrNotFound, and the row survives.
+	if err := s.Delete(ctx, "tenant-2", "shared-id"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant Delete err = %v, want ErrNotFound", err)
+	}
+	// SetPublished across tenants → ErrNotFound.
+	at := time.Now().UTC()
+	if err := s.SetPublished(ctx, "tenant-2", "shared-id", &at); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant SetPublished err = %v, want ErrNotFound", err)
+	}
+	// Update across tenants → ErrNotFound (tenant taken from c.TenantID).
+	victim := content("shared-id", "victim")
+	victim.TenantID = "tenant-2"
+	victim.Title = "hijacked"
+	if err := s.Update(ctx, victim); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant Update err = %v, want ErrNotFound", err)
+	}
+
+	// The owning tenant still sees the original, unmodified row.
+	got, err := s.Get(ctx, "tenant-1", "shared-id")
+	if err != nil {
+		t.Fatalf("owner Get: %v", err)
+	}
+	if got.Title == "hijacked" {
+		t.Fatal("cross-tenant Update mutated the owner's row")
 	}
 }
 
@@ -203,7 +249,7 @@ func TestUpdateNotFound(t *testing.T) {
 func TestDeleteNotFound(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	if err := s.Delete(context.Background(), "ghost"); !errors.Is(err, store.ErrNotFound) {
+	if err := s.Delete(context.Background(), "tenant-1", "ghost"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Delete(ghost) err = %v, want ErrNotFound", err)
 	}
 }
@@ -216,10 +262,10 @@ func TestSetPublished(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	at := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
-	if err := s.SetPublished(ctx, "p", &at); err != nil {
+	if err := s.SetPublished(ctx, "tenant-1", "p", &at); err != nil {
 		t.Fatalf("SetPublished: %v", err)
 	}
-	got, err := s.Get(ctx, "p")
+	got, err := s.Get(ctx, "tenant-1", "p")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -227,10 +273,10 @@ func TestSetPublished(t *testing.T) {
 		t.Fatalf("PublishedAt = %v, want %v", got.PublishedAt, at)
 	}
 	// Clearing publication (back to draft).
-	if err := s.SetPublished(ctx, "p", nil); err != nil {
+	if err := s.SetPublished(ctx, "tenant-1", "p", nil); err != nil {
 		t.Fatalf("SetPublished(nil): %v", err)
 	}
-	got, err = s.Get(ctx, "p")
+	got, err = s.Get(ctx, "tenant-1", "p")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -238,7 +284,7 @@ func TestSetPublished(t *testing.T) {
 		t.Fatalf("PublishedAt should be nil after clearing: %v", got.PublishedAt)
 	}
 	// Unknown id.
-	if err := s.SetPublished(ctx, "ghost", &at); !errors.Is(err, store.ErrNotFound) {
+	if err := s.SetPublished(ctx, "tenant-1", "ghost", &at); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("SetPublished(ghost) err = %v, want ErrNotFound", err)
 	}
 }

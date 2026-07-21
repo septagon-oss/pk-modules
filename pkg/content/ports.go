@@ -13,26 +13,26 @@ import "context"
 // flows depend on this surface for CRUD plus publish/unpublish lifecycle.
 type ContentService interface {
 	Create(ctx context.Context, c *Content) error
-	Get(ctx context.Context, id string) (*Content, error)
+	Get(ctx context.Context, tenantID, id string) (*Content, error)
 	GetBySlug(ctx context.Context, tenantID, kind, slug string) (*Content, error)
 	List(ctx context.Context, tenantID string, kind string, limit, offset int) ([]*Content, error)
 	Update(ctx context.Context, c *Content) error
-	Delete(ctx context.Context, id string) error
-	Publish(ctx context.Context, id string) error
-	Unpublish(ctx context.Context, id string) error
+	Delete(ctx context.Context, tenantID, id string) error
+	Publish(ctx context.Context, tenantID, id string) error
+	Unpublish(ctx context.Context, tenantID, id string) error
 }
 
 // ContentReader is the read-only port for non-CMS modules (e.g., notification
 // templating, public site renderers) that need to resolve content by ID or
 // slug without holding a full ContentService reference.
 type ContentReader interface {
-	Get(ctx context.Context, id string) (*Content, error)
+	Get(ctx context.Context, tenantID, id string) (*Content, error)
 	GetBySlug(ctx context.Context, tenantID, kind, slug string) (*Content, error)
 }
 
 // ContentPublisher is the lifecycle-only port exposed for admin publishing
 // workflows that should not be able to mutate the body.
 type ContentPublisher interface {
-	Publish(ctx context.Context, id string) error
-	Unpublish(ctx context.Context, id string) error
+	Publish(ctx context.Context, tenantID, id string) error
+	Unpublish(ctx context.Context, tenantID, id string) error
 }

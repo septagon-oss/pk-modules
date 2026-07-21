@@ -53,9 +53,10 @@ func (s *service) Create(ctx context.Context, c *Content) error {
 	return nil
 }
 
-// Get returns a content row by ID.
-func (s *service) Get(ctx context.Context, id string) (*Content, error) {
-	row, err := s.store.Get(ctx, id)
+// Get returns a content row by (tenantID, id). A row owned by another tenant
+// is reported as ErrNotFound.
+func (s *service) Get(ctx context.Context, tenantID, id string) (*Content, error) {
+	row, err := s.store.Get(ctx, tenantID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func (s *service) Update(ctx context.Context, c *Content) error {
 	if c.BodyFormat == "" {
 		c.BodyFormat = BodyFormatMarkdown
 	}
-	existing, err := s.store.Get(ctx, c.ID)
+	existing, err := s.store.Get(ctx, c.TenantID, c.ID)
 	if err != nil {
 		return err
 	}
@@ -108,28 +109,30 @@ func (s *service) Update(ctx context.Context, c *Content) error {
 	return nil
 }
 
-// Delete removes a content row by ID.
-func (s *service) Delete(ctx context.Context, id string) error {
-	existing, err := s.store.Get(ctx, id)
+// Delete removes the content row identified by (tenantID, id). A row owned by
+// another tenant is reported as ErrNotFound.
+func (s *service) Delete(ctx context.Context, tenantID, id string) error {
+	existing, err := s.store.Get(ctx, tenantID, id)
 	if err != nil {
 		return err
 	}
-	if err := s.store.Delete(ctx, id); err != nil {
+	if err := s.store.Delete(ctx, tenantID, id); err != nil {
 		return err
 	}
 	s.emit(ctx, fromStore(existing), "content.deleted", nil)
 	return nil
 }
 
-// Publish flips the published_at marker to now and emits a content.published
-// audit event when an emitter is wired.
-func (s *service) Publish(ctx context.Context, id string) error {
-	existing, err := s.store.Get(ctx, id)
+// Publish flips the published_at marker to now for the row identified by
+// (tenantID, id) and emits a content.published audit event when an emitter is
+// wired. A row owned by another tenant is reported as ErrNotFound.
+func (s *service) Publish(ctx context.Context, tenantID, id string) error {
+	existing, err := s.store.Get(ctx, tenantID, id)
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	if err := s.store.SetPublished(ctx, id, &now); err != nil {
+	if err := s.store.SetPublished(ctx, tenantID, id, &now); err != nil {
 		return err
 	}
 	published := fromStore(existing)
@@ -138,14 +141,15 @@ func (s *service) Publish(ctx context.Context, id string) error {
 	return nil
 }
 
-// Unpublish clears published_at and emits a content.unpublished audit event
-// when an emitter is wired.
-func (s *service) Unpublish(ctx context.Context, id string) error {
-	existing, err := s.store.Get(ctx, id)
+// Unpublish clears published_at for the row identified by (tenantID, id) and
+// emits a content.unpublished audit event when an emitter is wired. A row
+// owned by another tenant is reported as ErrNotFound.
+func (s *service) Unpublish(ctx context.Context, tenantID, id string) error {
+	existing, err := s.store.Get(ctx, tenantID, id)
 	if err != nil {
 		return err
 	}
-	if err := s.store.SetPublished(ctx, id, nil); err != nil {
+	if err := s.store.SetPublished(ctx, tenantID, id, nil); err != nil {
 		return err
 	}
 	c := fromStore(existing)

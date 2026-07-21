@@ -112,9 +112,11 @@ func (s *Store) Create(ctx context.Context, c *store.Content) error {
 	return nil
 }
 
-// Get returns a content row by ID.
-func (s *Store) Get(ctx context.Context, id string) (*store.Content, error) {
-	row := s.db.QueryRowContext(ctx, selectColumns+` WHERE id = ?`, id)
+// Get returns a content row by (tenant_id, id). The tenant predicate is
+// mandatory: a row owned by another tenant is reported as ErrNotFound, never
+// returned, so a guessed or leaked ID cannot cross the tenant boundary.
+func (s *Store) Get(ctx context.Context, tenantID, id string) (*store.Content, error) {
+	row := s.db.QueryRowContext(ctx, selectColumns+` WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	c, err := scanRow(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, store.ErrNotFound
@@ -197,9 +199,9 @@ func (s *Store) Update(ctx context.Context, c *store.Content) error {
 	c.UpdatedAt = time.Now().UTC()
 	res, err := s.db.ExecContext(
 		ctx,
-		`UPDATE content SET tenant_id = ?, kind = ?, slug = ?, title = ?, body = ?, body_format = ?, author_id = ?, updated_at = ?
-		 WHERE id = ?`,
-		c.TenantID, c.Kind, c.Slug, c.Title, c.Body, c.BodyFormat, c.AuthorID, c.UpdatedAt, c.ID,
+		`UPDATE content SET kind = ?, slug = ?, title = ?, body = ?, body_format = ?, author_id = ?, updated_at = ?
+		 WHERE id = ? AND tenant_id = ?`,
+		c.Kind, c.Slug, c.Title, c.Body, c.BodyFormat, c.AuthorID, c.UpdatedAt, c.ID, c.TenantID,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -214,9 +216,10 @@ func (s *Store) Update(ctx context.Context, c *store.Content) error {
 	return nil
 }
 
-// Delete removes a content row by ID.
-func (s *Store) Delete(ctx context.Context, id string) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM content WHERE id = ?`, id)
+// Delete removes a content row by (tenant_id, id). The tenant predicate is
+// mandatory so a caller cannot delete another tenant's row by ID.
+func (s *Store) Delete(ctx context.Context, tenantID, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM content WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	if err != nil {
 		return fmt.Errorf("content/sqlite: delete: %w", err)
 	}
@@ -227,14 +230,15 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// SetPublished updates the published_at column. Passing a nil time clears it
-// (transitioning the row back to draft).
-func (s *Store) SetPublished(ctx context.Context, id string, at *time.Time) error {
+// SetPublished updates the published_at column for a row owned by tenantID.
+// Passing a nil time clears it (transitioning the row back to draft). The
+// tenant predicate is mandatory so a caller cannot publish another tenant's row.
+func (s *Store) SetPublished(ctx context.Context, tenantID, id string, at *time.Time) error {
 	now := time.Now().UTC()
 	res, err := s.db.ExecContext(
 		ctx,
-		`UPDATE content SET published_at = ?, updated_at = ? WHERE id = ?`,
-		nullableTime(at), now, id,
+		`UPDATE content SET published_at = ?, updated_at = ? WHERE id = ? AND tenant_id = ?`,
+		nullableTime(at), now, id, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("content/sqlite: set published: %w", err)
