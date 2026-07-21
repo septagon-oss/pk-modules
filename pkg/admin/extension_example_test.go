@@ -1,5 +1,8 @@
 package admin_test
 
+// Validates: REQ-ADMIN-001.
+// Per: ADR-0032.
+// Discipline: C-14.
 // extension_example_test.go demonstrates the Pro-extension pattern: embed
 // *admin.Module, add Pro-only fields, override or augment behavior. The
 // compile-time check guarantees the OSS Module type stays embeddable.

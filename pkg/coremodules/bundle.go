@@ -1,9 +1,8 @@
-// Implements: REQ-MODULES-001.
-// Per: ADR-0009.
-// Discipline: C-14.
-
 package coremodules
 
+// Implements: REQ-016.
+// Per: ADR-0016.
+// Discipline: C-14.
 import "github.com/septagon-oss/pk-core/pkg/module"
 
 // TenantService is the minimal tenant contract exposed by the tenant module.

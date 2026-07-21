@@ -1,5 +1,8 @@
 package coremodules_test
 
+// Validates: REQ-016.
+// Per: ADR-0016.
+// Discipline: C-14.
 // bundle_test.go validates deterministic composition of the minimal OSS module
 // bundle.
 //

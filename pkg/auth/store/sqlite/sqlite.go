@@ -10,6 +10,9 @@
 // Convention: C-14 (every Go file declares its purpose).
 package sqlite
 
+// Implements: REQ-AUTH-001.
+// Per: ADR-0028.
+// Discipline: C-14.
 import (
 	"context"
 	"database/sql"

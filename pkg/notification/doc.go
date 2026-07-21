@@ -19,3 +19,7 @@
 // ADR: ADR-0009 (ports-only module communication), ADR-0017 (composition through dependency injection), ADR-0029 (file purpose declaration).
 // Convention: C-14 (every Go file declares its purpose).
 package notification
+
+// Implements: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.

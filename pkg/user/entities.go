@@ -1,5 +1,8 @@
 package user
 
+// Implements: REQ-USER-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // entities.go owns the User entity, descriptor metadata, and validation
 // helpers shared by handlers, the store layer, and admin pages.
 //

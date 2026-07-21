@@ -1,5 +1,8 @@
 package audit
 
+// Implements: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // options.go owns functional options used by NewModule. New options should be
 // purely additive; never change the meaning of an existing option.
 //

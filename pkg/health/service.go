@@ -1,8 +1,11 @@
 package health
 
+// Implements: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // service.go owns the default HealthService implementation and the
-// portslib.HealthRegistrar adapter. The service is a thin shim over the
-// pk-core health.Registrar primitive; the adapter narrows pk-core's
+// portslib.HealthRegistrar adapter. The service delegates to the pk-core
+// health.Registrar primitive; the adapter narrows pk-core's
 // variadic-option Register signature down to the portslib contract.
 //
 // ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).

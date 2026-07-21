@@ -1,5 +1,8 @@
 package notification
 
+// Implements: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.
 // entities.go owns the Subscription entity, severity constants, and descriptor
 // metadata used by handlers, the store layer, and admin pages. The
 // Notification value type is re-used from portslib.Notification so adjacent

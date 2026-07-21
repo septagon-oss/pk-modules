@@ -1,5 +1,8 @@
 package notification
 
+// Implements: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.
 // service.go owns the default NotificationService implementation. Create
 // iterates every registered channel in order; the first error short-circuits
 // the fan-out. The default in-app channel persists notifications to the

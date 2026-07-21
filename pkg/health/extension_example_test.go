@@ -1,5 +1,8 @@
 package health_test
 
+// Validates: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // extension_example_test.go demonstrates how a Pro module embeds *Module and
 // extends the OSS surface without changing it. The compile-time embed plus
 // the runtime check that Registrar() works through the outer type are the

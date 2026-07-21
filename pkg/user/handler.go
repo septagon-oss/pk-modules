@@ -1,5 +1,8 @@
 package user
 
+// Implements: REQ-USER-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // handler.go owns the HTTP handlers that expose the canonical
 // /api/v1/users surface. The handler is mountable via RegisterRoutes against
 // any http.ServeMux, so apps can plug it in without depending on a specific

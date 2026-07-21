@@ -1,5 +1,8 @@
 package overlay
 
+// Validates: REQ-SITE-001.
+// Per: ADR-0032.
+// Discipline: C-14.
 // overlay_test.go validates homepage overlay template loading, rendering, and
 // helper behavior.
 //

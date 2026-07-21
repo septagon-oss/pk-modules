@@ -1,5 +1,8 @@
 package health
 
+// Implements: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // entities.go owns descriptor metadata used by handlers, admin pages, and
 // the catalog. The health module re-exports pk-core's Result/Status types as
 // the canonical wire format so callers do not import two near-identical

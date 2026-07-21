@@ -1,5 +1,8 @@
 package health_test
 
+// Validates: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // module_test.go validates the health_management module against its public
 // API. Tests live in health_test to ensure the OSS contract is exercised the
 // way callers see it.

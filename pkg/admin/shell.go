@@ -1,5 +1,8 @@
 package admin
 
+// Implements: REQ-ADMIN-001.
+// Per: ADR-0032.
+// Discipline: C-14.
 // shell.go owns the in-memory AdminRegistrar implementation and the HTTP
 // renderer for the admin shell. The Shell stores entity-CRUD descriptors,
 // custom pages, and sidebar sections registered by sibling modules at boot

@@ -1,5 +1,8 @@
 package audit
 
+// Implements: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // handler.go owns the HTTP handlers that expose the canonical
 // /api/v1/audit-events surface. The handler is mountable via RegisterRoutes
 // against any http.ServeMux. The OSS surface is GET (query) and POST

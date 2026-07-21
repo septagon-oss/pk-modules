@@ -1,5 +1,8 @@
 package notification
 
+// Implements: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.
 // handler.go owns the HTTP handlers that expose the canonical
 // /api/v1/notifications and /api/v1/notification-subscriptions surfaces.
 //

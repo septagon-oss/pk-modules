@@ -1,5 +1,8 @@
 package notification
 
+// Implements: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.
 // convert.go owns the value-shape conversion between portslib.Notification
 // (the canonical cross-module value) and store.Notification (the persisted
 // row shape). Data is JSON-encoded for storage so the store layer stays

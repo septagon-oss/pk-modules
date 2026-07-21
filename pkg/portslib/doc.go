@@ -10,3 +10,7 @@
 // ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
 // Convention: C-14 (every Go file declares its purpose).
 package portslib
+
+// Implements: REQ-002.
+// Per: ADR-0009.
+// Discipline: C-14.

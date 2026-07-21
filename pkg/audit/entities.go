@@ -1,5 +1,8 @@
 package audit
 
+// Implements: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // entities.go owns the Event entity, severity constants, and descriptor
 // metadata used by handlers, the store layer, and admin pages.
 //

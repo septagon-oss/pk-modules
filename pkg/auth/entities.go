@@ -1,5 +1,8 @@
 package auth
 
+// Implements: REQ-AUTH-001.
+// Per: ADR-0028.
+// Discipline: C-14.
 // entities.go owns the Session entity, the Credentials value type, and the
 // descriptor metadata shared by handlers, the store layer, and admin pages.
 //

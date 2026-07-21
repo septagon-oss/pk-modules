@@ -1,5 +1,8 @@
 package tenant
 
+// Implements: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // admin.go owns the admin shell wiring for tenant_management: the sidebar
 // section, the entity-CRUD registration, and a small server-rendered page
 // stub that hosts the dashboard listing.

@@ -1,5 +1,8 @@
 package auth_test
 
+// Validates: REQ-AUTH-001.
+// Per: ADR-0028.
+// Discipline: C-14.
 // handler_test.go validates the HTTP error-mapping contract of the auth
 // session handler. It exercises the handler the way an OSS caller hits the
 // /api/v1/auth/sessions surface, asserting that bad input yields a client

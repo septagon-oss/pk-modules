@@ -1,5 +1,8 @@
 package admin
 
+// Implements: REQ-ADMIN-001.
+// Per: ADR-0032.
+// Discipline: C-14.
 // ports.go owns the public interfaces other modules consume from this module.
 // The admin module is the canonical provider of portslib.AdminRegistrar; this
 // file only exists to keep the symmetry with sibling modules (audit, user,

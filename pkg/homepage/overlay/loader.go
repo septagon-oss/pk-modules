@@ -1,5 +1,8 @@
 package overlay
 
+// Implements: REQ-SITE-001.
+// Per: ADR-0032.
+// Discipline: C-14.
 // loader.go owns deterministic overlay template discovery and partial loading.
 //
 // ADR: ADR-0029 (file purpose declaration).

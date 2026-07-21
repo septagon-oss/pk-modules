@@ -1,5 +1,8 @@
 package audit
 
+// Implements: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // service.go owns the default AuditService, AuditReader, and AuditEmitter
 // implementations. Pro embeds *service to add retention enforcement,
 // partitioning, and forwarding to external SIEMs.

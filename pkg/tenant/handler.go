@@ -1,5 +1,8 @@
 package tenant
 
+// Implements: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // handler.go owns the HTTP handlers that expose the canonical
 // /api/v1/tenants surface. The handler is mountable via RegisterRoutes against
 // any http.ServeMux, so apps can plug it in without depending on a specific

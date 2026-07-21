@@ -1,5 +1,8 @@
 package auth
 
+// Implements: REQ-AUTH-001.
+// Per: ADR-0028.
+// Discipline: C-14.
 // admin.go owns the admin shell wiring for auth_management: the sidebar
 // section, the entity-CRUD registration for sessions, and a small
 // server-rendered page stub that describes the auth API surface.

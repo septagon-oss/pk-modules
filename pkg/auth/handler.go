@@ -1,5 +1,8 @@
 package auth
 
+// Implements: REQ-AUTH-001.
+// Per: ADR-0028.
+// Discipline: C-14.
 // handler.go owns the HTTP handlers that expose the canonical
 // /api/v1/auth/sessions surface. The handler is mountable via
 // RegisterRoutes against any http.ServeMux, so apps can plug it in without

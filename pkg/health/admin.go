@@ -1,5 +1,8 @@
 package health
 
+// Implements: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // admin.go owns the admin shell wiring for health_management: the sidebar
 // section and a small server-rendered page stub that surfaces the aggregate
 // health report.

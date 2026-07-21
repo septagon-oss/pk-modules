@@ -1,5 +1,8 @@
 package tenant
 
+// Implements: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // service.go owns the default TenantService and TenantContextProvider
 // implementations. Pro can embed *service to compose SSO-aware lookups, RLS
 // scoping, and billing-tier-aware quotas without reimplementing CRUD.

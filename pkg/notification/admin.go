@@ -1,5 +1,8 @@
 package notification
 
+// Implements: REQ-NOTIF-002.
+// Per: ADR-0017.
+// Discipline: C-14.
 // admin.go owns the admin shell wiring for notification_management: the
 // sidebar section, the entity-CRUD registration, and a server-rendered page
 // stub that hosts the notifications dashboard.

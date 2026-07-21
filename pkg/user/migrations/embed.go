@@ -9,6 +9,9 @@
 // Convention: C-14 (every Go file declares its purpose).
 package migrations
 
+// Implements: REQ-USER-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 import "embed"
 
 //go:embed *.sql

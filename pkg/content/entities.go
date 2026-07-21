@@ -1,5 +1,8 @@
 package content
 
+// Implements: REQ-CONTENT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // entities.go owns the Content entity, body-format constants, and descriptor
 // metadata used by handlers, the store layer, and admin pages.
 //

@@ -1,5 +1,8 @@
 package apikey
 
+// Implements: REQ-APIKEY-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // ports.go owns the public interfaces other modules consume. Downstream
 // modules should depend on these interfaces — never on *Module or the
 // concrete store implementations.

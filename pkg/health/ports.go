@@ -1,5 +1,8 @@
 package health
 
+// Implements: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // ports.go owns the public interfaces other modules consume from this module.
 // The module is the canonical provider of portslib.HealthRegistrar; callers
 // that need a richer surface (eg. one-shot Check()) can use HealthService.

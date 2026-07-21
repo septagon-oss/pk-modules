@@ -1,5 +1,8 @@
 package apikey
 
+// Implements: REQ-APIKEY-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // service.go owns the default APIKeyService implementation. Pro embeds
 // *service to compose rotation hooks, finer-grained scopes, and per-key
 // telemetry without reimplementing issuance and verification.

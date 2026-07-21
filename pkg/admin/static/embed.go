@@ -8,6 +8,9 @@
 // Convention: C-14 (every Go file declares its purpose).
 package adminstatic
 
+// Implements: REQ-ADMIN-001.
+// Per: ADR-0032.
+// Discipline: C-14.
 import (
 	"embed"
 	"io/fs"

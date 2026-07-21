@@ -1,5 +1,8 @@
 package audit
 
+// Implements: REQ-AUDIT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // admin.go owns the admin shell wiring for audit_management: the sidebar
 // section, the entity-CRUD registration, and a small server-rendered page
 // stub that hosts the audit log viewer.

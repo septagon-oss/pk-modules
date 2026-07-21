@@ -1,6 +1,9 @@
 // Package overlay renders client-owned homepage overlay templates.
 package overlay
 
+// Implements: REQ-SITE-001.
+// Per: ADR-0032.
+// Discipline: C-14.
 // overlay.go owns safe HTML rendering helpers for client-owned homepage
 // overlays.
 //

@@ -1,5 +1,8 @@
 package user
 
+// Implements: REQ-USER-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // service.go owns the default UserService implementation. Pro can embed
 // *service to compose SSO-aware lookups, RLS scoping, and richer RBAC
 // without reimplementing CRUD.

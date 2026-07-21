@@ -1,5 +1,8 @@
 package apikey
 
+// Implements: REQ-APIKEY-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // entities.go owns the APIKey entity and the descriptor metadata shared by
 // handlers, the store layer, and admin pages.
 //

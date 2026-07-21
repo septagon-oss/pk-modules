@@ -1,5 +1,8 @@
 package apikey
 
+// Implements: REQ-APIKEY-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // handler.go owns the HTTP handlers that expose the canonical
 // /api/v1/api-keys surface. The handler is mountable via RegisterRoutes
 // against any http.ServeMux, so apps can plug it in without depending on

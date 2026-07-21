@@ -1,5 +1,8 @@
 package health
 
+// Implements: REQ-HEALTH-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // handler.go owns the HTTP handler that exposes /healthz. It delegates to
 // the underlying pk-core health.Registrar's HTTPHandler so the JSON wire
 // format, status codes, and degraded-as-200 semantics stay consistent across

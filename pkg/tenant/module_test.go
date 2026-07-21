@@ -1,5 +1,8 @@
 package tenant_test
 
+// Validates: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // module_test.go validates the tenant_management module against its public
 // API. Tests live in tenant_test to ensure the OSS contract is exercised the
 // way callers see it.

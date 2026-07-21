@@ -1,5 +1,8 @@
 package content
 
+// Implements: REQ-CONTENT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // admin.go owns the admin shell wiring for content_management: the sidebar
 // section, the entity-CRUD registration, and a small server-rendered page
 // stub that hosts the content authoring dashboard.

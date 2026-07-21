@@ -1,5 +1,8 @@
 package content
 
+// Implements: REQ-CONTENT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // handler.go owns the HTTP handlers that expose the canonical
 // /api/v1/content surface. The handler is mountable via RegisterRoutes
 // against any http.ServeMux.

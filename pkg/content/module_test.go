@@ -1,5 +1,8 @@
 package content_test
 
+// Validates: REQ-CONTENT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // module_test.go validates the content_management module against its public
 // API. Tests live in content_test to ensure the OSS contract is exercised
 // the way callers see it.

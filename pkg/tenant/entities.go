@@ -1,5 +1,8 @@
 package tenant
 
+// Implements: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 // entities.go owns the Tenant entity and the descriptor metadata used by
 // generic CRUD handlers, admin pages, and the catalog.
 //
