@@ -1,5 +1,9 @@
 # pk-modules
 
+> Part of [PlatformKit](https://github.com/septagon-oss/platformkit) — the open-source Go backend for multi-tenant SaaS.
+
+**Depends on.** `pk-core` only within PlatformKit (plus `modernc.org/sqlite` for the reference stores). It does not depend on `pk-shared` or `pk-runtime` — an app supplies the host.
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/septagon-oss/pk-modules.svg)](https://pkg.go.dev/github.com/septagon-oss/pk-modules)
 [![CI](https://github.com/septagon-oss/pk-modules/actions/workflows/go.yml/badge.svg)](https://github.com/septagon-oss/pk-modules/actions/workflows/go.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -56,7 +60,7 @@ func main() {
 - `pkg/content`, `pkg/notification`, `pkg/audit` — content publishing, in-app notifications, and append-only audit logging.
 - `pkg/admin`, `pkg/health` — a minimal self-contained admin shell and health/readiness reporting.
 - Every data module exposes a `store.Store` persistence port plus a `store/sqlite` reference implementation built on `modernc.org/sqlite` (pure-Go, no cgo).
-- `pkg/coremodules` — the smallest composable bundle wiring tenant + audit + content for OSS examples and downstream distributions.
+- `pkg/coremodules` — the smallest composable bundle wiring tenant + audit + content for OSS examples and downstream distributions. Note that `coremodules.Bundle()` is not the nine-module starter set the PlatformKit front door composes: it wires three contract-only composition descriptors, while the starter app in `pk-apps` composes the full nine modules above with their stores, services, and handlers.
 - `pkg/portslib` — the shared port contracts modules consume explicitly instead of importing one another.
 
 ## Verify
