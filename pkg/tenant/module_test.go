@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/tenant"
 	"github.com/septagon-oss/pk-modules/pkg/tenant/store"
 
@@ -55,6 +56,54 @@ func TestNewModuleDefaults(t *testing.T) {
 	}
 	if m.ContextProvider() == nil {
 		t.Fatalf("ContextProvider() is nil — module.go must assign the default contextProvider explicitly")
+	}
+}
+
+// TestHandlerSelfOnlyBoundary proves the tenant HTTP surface's authorization
+// rule: an authenticated caller may act only on its own tenant. It creates two
+// tenants, then drives the handler with a principal scoped to tenant "t-self"
+// and asserts: reading its own tenant works, reading another tenant's record is
+// 404 (not disclosed), an anonymous request is 401, and provisioning a new
+// tenant via the API is 403 (a platform operation).
+func TestHandlerSelfOnlyBoundary(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+
+	for _, id := range []string{"t-self", "t-other"} {
+		if err := m.Service().Create(ctx, &tenant.Tenant{ID: id, Slug: id, Name: id}); err != nil {
+			t.Fatalf("seed tenant %s: %v", id, err)
+		}
+	}
+
+	withPrincipal := func(r *http.Request, tenantID string) *http.Request {
+		if tenantID == "" {
+			return r
+		}
+		return r.WithContext(identity.ContextWithPrincipal(r.Context(),
+			identity.Principal{Subject: "u", TenantID: tenantID, AuthMethod: "session"}))
+	}
+	do := func(method, path, tenantID string) *httptest.ResponseRecorder {
+		req := withPrincipal(httptest.NewRequest(method, path, nil), tenantID)
+		rec := httptest.NewRecorder()
+		m.HTTPHandler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := do(http.MethodGet, "/api/v1/tenants/t-self", "t-self"); rec.Code != http.StatusOK {
+		t.Fatalf("GET own tenant = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodGet, "/api/v1/tenants/t-other", "t-self"); rec.Code != http.StatusNotFound {
+		t.Fatalf("GET another tenant = %d, want 404 (cross-tenant read must be denied)", rec.Code)
+	}
+	if rec := do(http.MethodDelete, "/api/v1/tenants/t-other", "t-self"); rec.Code != http.StatusNotFound {
+		t.Fatalf("DELETE another tenant = %d, want 404", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/api/v1/tenants/t-self", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous GET = %d, want 401", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/api/v1/tenants", "t-self"); rec.Code != http.StatusForbidden {
+		t.Fatalf("POST create tenant = %d, want 403 (platform operation)", rec.Code)
 	}
 }
 

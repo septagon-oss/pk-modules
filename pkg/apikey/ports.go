@@ -18,7 +18,7 @@ import (
 type APIKeyService interface {
 	Issue(ctx context.Context, tenantID, userID, name string, scopes []string, ttl time.Duration) (plaintext string, key *APIKey, err error)
 	Verify(ctx context.Context, plaintext string) (*APIKey, error)
-	Revoke(ctx context.Context, id string) error
+	Revoke(ctx context.Context, tenantID, id string) error
 	List(ctx context.Context, tenantID string) ([]*APIKey, error)
 }
 

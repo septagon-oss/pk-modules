@@ -14,8 +14,26 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/tenant/store"
 )
+
+// callerTenant returns the tenant the authenticated principal belongs to.
+// Unlike the other business modules, tenant records are top-level (there is no
+// parent tenant to scope by), so the HTTP surface enforces a self-only rule:
+// a caller may read or modify ONLY its own tenant. Anonymous callers get 401.
+//
+// The tenant SERVICE methods stay un-scoped on purpose — they are also used
+// internally (seed provisioning, user_management validating a tenant_id) with
+// arbitrary tenant IDs. The authorization boundary is here, at the HTTP edge.
+func callerTenant(w http.ResponseWriter, r *http.Request) (string, bool) {
+	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	if tid == "" {
+		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
+		return "", false
+	}
+	return tid, true
+}
 
 // Handler exposes the tenant CRUD HTTP surface.
 type Handler struct {
@@ -74,15 +92,34 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	tenants, err := h.svc.List(r.Context())
+	// A tenant-scoped caller sees only its own tenant, never the platform-wide
+	// list. (The full svc.List() is a platform/operator view, not exposed here.)
+	self, ok := callerTenant(w, r)
+	if !ok {
+		return
+	}
+	t, err := h.svc.Get(r.Context(), self)
+	if errors.Is(err, store.ErrNotFound) {
+		writeJSON(w, http.StatusOK, []*Tenant{})
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, tenants)
+	writeJSON(w, http.StatusOK, []*Tenant{t})
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request, id string) {
+	self, ok := callerTenant(w, r)
+	if !ok {
+		return
+	}
+	// Self-only: another tenant's record reads back as 404, never disclosed.
+	if id != self {
+		http.Error(w, "tenant not found", http.StatusNotFound)
+		return
+	}
 	t, err := h.svc.Get(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		http.Error(w, "tenant not found", http.StatusNotFound)
@@ -96,24 +133,26 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
-	var t Tenant
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	// Provisioning a new tenant is a platform/operator operation, not something
+	// a tenant-scoped caller may do (it would be privilege escalation, and OSS
+	// ships no platform-admin role). Tenants are seeded in-process or created
+	// by an operator out of band. A downstream distribution with a platform
+	// authz tier can re-open this route behind that check.
+	if _, ok := callerTenant(w, r); !ok {
 		return
 	}
-	if err := h.svc.Create(r.Context(), &t); err != nil {
-		status := http.StatusInternalServerError
-		switch {
-		case errors.Is(err, store.ErrDuplicateSlug):
-			status = http.StatusConflict
-		}
-		http.Error(w, err.Error(), status)
-		return
-	}
-	writeJSON(w, http.StatusCreated, &t)
+	http.Error(w, "tenant provisioning is a platform operation and is not available via the tenant-scoped API", http.StatusForbidden)
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
+	self, ok := callerTenant(w, r)
+	if !ok {
+		return
+	}
+	if id != self {
+		http.Error(w, "tenant not found", http.StatusNotFound)
+		return
+	}
 	var t Tenant
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
@@ -135,6 +174,14 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 }
 
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request, id string) {
+	self, ok := callerTenant(w, r)
+	if !ok {
+		return
+	}
+	if id != self {
+		http.Error(w, "tenant not found", http.StatusNotFound)
+		return
+	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "tenant not found", http.StatusNotFound)

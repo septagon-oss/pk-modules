@@ -15,8 +15,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/apikey/store"
 )
+
+// tenantOf returns the tenant the request is authorized to act in, taken from
+// the authenticated principal — never from client input. Anonymous or
+// no-tenant callers get 401 and ok=false. Management operations (issue, list,
+// revoke) are scoped to this tenant; API-key *authentication* is a separate
+// path that resolves its own tenant from the presented key.
+func tenantOf(w http.ResponseWriter, r *http.Request) (string, bool) {
+	tid := identity.PrincipalFromContext(r.Context()).TenantID
+	if tid == "" {
+		http.Error(w, "unauthorized: no tenant in request identity", http.StatusUnauthorized)
+		return "", false
+	}
+	return tid, true
+}
 
 // Handler exposes the API key HTTP surface.
 type Handler struct {
@@ -74,13 +89,19 @@ type issueResponse struct {
 }
 
 func (h *Handler) issue(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
 	var req issueRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
+	// The tenant is authoritative from the request identity; a body-supplied
+	// tenant_id is ignored so a caller cannot mint keys for another tenant.
 	ttl := time.Duration(req.TTLSecond) * time.Second
-	plaintext, key, err := h.svc.Issue(r.Context(), req.TenantID, req.UserID, req.Name, req.Scopes, ttl)
+	plaintext, key, err := h.svc.Issue(r.Context(), tenant, req.UserID, req.Name, req.Scopes, ttl)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -89,9 +110,8 @@ func (h *Handler) issue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	tenant := r.URL.Query().Get("tenant_id")
-	if tenant == "" {
-		http.Error(w, "tenant_id query parameter is required", http.StatusBadRequest)
+	tenant, ok := tenantOf(w, r)
+	if !ok {
 		return
 	}
 	keys, err := h.svc.List(r.Context(), tenant)
@@ -103,7 +123,11 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) revoke(w http.ResponseWriter, r *http.Request, id string) {
-	if err := h.svc.Revoke(r.Context(), id); err != nil {
+	tenant, ok := tenantOf(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.Revoke(r.Context(), tenant, id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "api key not found", http.StatusNotFound)
 			return

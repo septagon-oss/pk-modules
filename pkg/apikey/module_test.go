@@ -187,7 +187,7 @@ func TestVerifyRejectsRevokedKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if err := m.Service().Revoke(ctx, issued.ID); err != nil {
+	if err := m.Service().Revoke(ctx, "t-1", issued.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
 	_, err = m.Service().Verify(ctx, plaintext)
@@ -219,7 +219,7 @@ func TestRevokeKeyMarksRevoked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if err := m.Service().Revoke(ctx, issued.ID); err != nil {
+	if err := m.Service().Revoke(ctx, "t-1", issued.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
 	keys, err := m.Service().List(ctx, "t-1")
@@ -401,7 +401,7 @@ func TestRevokeEmitsAuditEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if err := m.Service().Revoke(ctx, issued.ID); err != nil {
+	if err := m.Service().Revoke(ctx, "t-1", issued.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
 	calls := emitter.Calls()
@@ -432,7 +432,7 @@ func TestNilAuditEmitterIsAllowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if err := m.Service().Revoke(ctx, issued.ID); err != nil {
+	if err := m.Service().Revoke(ctx, "t-1", issued.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
 }

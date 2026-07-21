@@ -65,7 +65,7 @@ func TestCreateGetRoundTrip(t *testing.T) {
 		t.Fatal("Create should default CreatedAt")
 	}
 
-	got, err := s.Get(ctx, "k1")
+	got, err := s.Get(ctx, "tenant-1", "k1")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -80,8 +80,49 @@ func TestCreateGetRoundTrip(t *testing.T) {
 func TestGetNotFound(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	if _, err := s.Get(context.Background(), "missing"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Get(context.Background(), "tenant-1", "missing"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Get(missing) err = %v, want ErrNotFound", err)
+	}
+}
+
+// TestCrossTenantManagementDeniedButAuthLookupGlobal proves the two-sided
+// contract: management-by-ID (Get, Revoke) is tenant-scoped so a caller cannot
+// touch another tenant's key, while GetByPrefix — the authentication path —
+// stays GLOBAL so a presented key resolves regardless of the caller's tenant.
+func TestCrossTenantManagementDeniedButAuthLookupGlobal(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	in := sampleKey("k1") // tenant-1, prefix pk_k1
+	if err := s.Create(ctx, in); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Management by ID is denied across tenants.
+	if _, err := s.Get(ctx, "tenant-2", "k1"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant Get err = %v, want ErrNotFound", err)
+	}
+	if err := s.Revoke(ctx, "tenant-2", "k1"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("cross-tenant Revoke err = %v, want ErrNotFound", err)
+	}
+	// The owner still sees an un-revoked key.
+	got, err := s.Get(ctx, "tenant-1", "k1")
+	if err != nil {
+		t.Fatalf("owner Get: %v", err)
+	}
+	if got.RevokedAt != nil {
+		t.Fatal("cross-tenant Revoke revoked the owner's key")
+	}
+
+	// Authentication lookup is global: the presented prefix resolves the key
+	// without any tenant context (the key carries its own tenant).
+	rows, err := s.GetByPrefix(ctx, "pk_k1")
+	if err != nil {
+		t.Fatalf("GetByPrefix: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "k1" || rows[0].TenantID != "tenant-1" {
+		t.Fatalf("GetByPrefix must resolve the key globally, got %+v", rows)
 	}
 }
 
@@ -169,10 +210,10 @@ func TestRevoke(t *testing.T) {
 	if err := s.Create(ctx, sampleKey("rev")); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := s.Revoke(ctx, "rev"); err != nil {
+	if err := s.Revoke(ctx, "tenant-1", "rev"); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
-	got, err := s.Get(ctx, "rev")
+	got, err := s.Get(ctx, "tenant-1", "rev")
 	if err != nil {
 		t.Fatalf("Get after revoke: %v", err)
 	}
@@ -180,7 +221,7 @@ func TestRevoke(t *testing.T) {
 		t.Fatal("Revoke did not set RevokedAt")
 	}
 	// Revoking again is a no-op (already revoked) and must not error.
-	if err := s.Revoke(ctx, "rev"); err != nil {
+	if err := s.Revoke(ctx, "tenant-1", "rev"); err != nil {
 		t.Fatalf("Revoke (second) should be a no-op: %v", err)
 	}
 }
@@ -188,7 +229,7 @@ func TestRevoke(t *testing.T) {
 func TestRevokeNotFound(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	if err := s.Revoke(context.Background(), "missing"); !errors.Is(err, store.ErrNotFound) {
+	if err := s.Revoke(context.Background(), "tenant-1", "missing"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Revoke(missing) err = %v, want ErrNotFound", err)
 	}
 }
@@ -201,10 +242,10 @@ func TestUpdateLastUsed(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	at := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
-	if err := s.UpdateLastUsed(ctx, "lu", at); err != nil {
+	if err := s.UpdateLastUsed(ctx, "tenant-1", "lu", at); err != nil {
 		t.Fatalf("UpdateLastUsed: %v", err)
 	}
-	got, err := s.Get(ctx, "lu")
+	got, err := s.Get(ctx, "tenant-1", "lu")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

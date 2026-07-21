@@ -154,28 +154,25 @@ func (s *service) Verify(ctx context.Context, plaintext string) (*APIKey, error)
 			return nil, ErrKeyExpired
 		}
 		// Bump last_used_at; failure to update is non-fatal because the
-		// verification itself succeeded.
-		_ = s.store.UpdateLastUsed(ctx, row.ID, now)
+		// verification itself succeeded. The tenant comes from the matched row
+		// (GetByPrefix is global; the verified key selects its own tenant).
+		_ = s.store.UpdateLastUsed(ctx, row.TenantID, row.ID, now)
 		row.LastUsedAt = &now
 		return fromStore(row), nil
 	}
 	return nil, ErrInvalidKey
 }
 
-// Revoke marks a key revoked.
-func (s *service) Revoke(ctx context.Context, id string) error {
+// Revoke marks the key identified by (tenantID, id) revoked. A key in another
+// tenant is reported as ErrNotFound.
+func (s *service) Revoke(ctx context.Context, tenantID, id string) error {
+	if strings.TrimSpace(tenantID) == "" {
+		return errors.New("apikey: tenant_id is required")
+	}
 	if strings.TrimSpace(id) == "" {
 		return errors.New("apikey: id is required")
 	}
-	// Lookup the key first so the audit event can carry the tenant; failure
-	// here must not block the actual revoke from running.
-	var tenantID string
-	if s.audit != nil {
-		if row, err := s.store.Get(ctx, id); err == nil && row != nil {
-			tenantID = row.TenantID
-		}
-	}
-	if err := s.store.Revoke(ctx, id); err != nil {
+	if err := s.store.Revoke(ctx, tenantID, id); err != nil {
 		return err
 	}
 	if s.audit != nil {

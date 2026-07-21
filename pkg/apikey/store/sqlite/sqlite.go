@@ -107,9 +107,12 @@ func (s *Store) Create(ctx context.Context, k *store.APIKey) error {
 	return nil
 }
 
-// Get returns an API key by ID.
-func (s *Store) Get(ctx context.Context, id string) (*store.APIKey, error) {
-	row := s.db.QueryRowContext(ctx, selectColumns+` WHERE id = ?`, id)
+// Get returns the API key identified by (tenantID, id). The tenant predicate
+// is mandatory so a management caller cannot read another tenant's key by ID.
+// (Authentication uses GetByPrefix, which is intentionally global because the
+// presented key itself selects the tenant.)
+func (s *Store) Get(ctx context.Context, tenantID, id string) (*store.APIKey, error) {
+	row := s.db.QueryRowContext(ctx, selectColumns+` WHERE id = ? AND tenant_id = ?`, id, tenantID)
 	k, err := scanKey(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, store.ErrNotFound
@@ -168,35 +171,39 @@ func (s *Store) List(ctx context.Context, tenantID string) ([]*store.APIKey, err
 	return out, nil
 }
 
-// Revoke marks a key revoked at time.Now().UTC().
-func (s *Store) Revoke(ctx context.Context, id string) error {
+// Revoke marks the key identified by (tenantID, id) revoked at time.Now().UTC().
+// The tenant predicate is mandatory so a caller cannot revoke another tenant's
+// key by ID.
+func (s *Store) Revoke(ctx context.Context, tenantID, id string) error {
 	now := time.Now().UTC()
 	res, err := s.db.ExecContext(
 		ctx,
-		`UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL`,
-		now, id,
+		`UPDATE api_keys SET revoked_at = ? WHERE id = ? AND tenant_id = ? AND revoked_at IS NULL`,
+		now, id, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("apikey/sqlite: revoke: %w", err)
 	}
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
-		if _, getErr := s.Get(ctx, id); errors.Is(getErr, store.ErrNotFound) {
+		if _, getErr := s.Get(ctx, tenantID, id); errors.Is(getErr, store.ErrNotFound) {
 			return store.ErrNotFound
 		}
 	}
 	return nil
 }
 
-// UpdateLastUsed bumps the last_used_at timestamp.
-func (s *Store) UpdateLastUsed(ctx context.Context, id string, at time.Time) error {
+// UpdateLastUsed bumps the last_used_at timestamp for the key identified by
+// (tenantID, id). During authentication the caller passes the tenant of the
+// key it just verified, so this stays tenant-scoped end to end.
+func (s *Store) UpdateLastUsed(ctx context.Context, tenantID, id string, at time.Time) error {
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(
 		ctx,
-		`UPDATE api_keys SET last_used_at = ? WHERE id = ?`,
-		at, id,
+		`UPDATE api_keys SET last_used_at = ? WHERE id = ? AND tenant_id = ?`,
+		at, id, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("apikey/sqlite: update last_used_at: %w", err)
