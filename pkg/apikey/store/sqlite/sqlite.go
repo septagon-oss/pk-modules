@@ -265,5 +265,9 @@ func isUniqueViolation(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "unique") || strings.Contains(msg, "constraint")
+	// Match only UNIQUE violations. sqlite phrases them "UNIQUE constraint
+	// failed: ..." and Postgres "violates unique constraint"; both contain
+	// "unique". Matching bare "constraint" was too broad — it mislabeled NOT
+	// NULL/CHECK/FK failures as duplicates (a spurious 409).
+	return strings.Contains(msg, "unique")
 }

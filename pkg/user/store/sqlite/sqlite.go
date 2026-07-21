@@ -128,8 +128,14 @@ func (s *Store) GetByUsername(ctx context.Context, tenantID, username string) (*
 
 // List returns users for a tenant, ordered by username.
 func (s *Store) List(ctx context.Context, tenantID string, limit, offset int) ([]*store.User, error) {
+	const maxLimit = 1000
 	if limit <= 0 {
 		limit = 50
+	}
+	if limit > maxLimit {
+		// Cap the page size so a caller cannot request an unbounded read of the
+		// whole tenant (a memory/latency DoS), matching the other list paths.
+		limit = maxLimit
 	}
 	if offset < 0 {
 		offset = 0

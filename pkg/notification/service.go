@@ -86,10 +86,11 @@ func (s *service) GetByUser(ctx context.Context, tenantID, userID string, limit,
 	return out, nil
 }
 
-// MarkRead sets read_at to now for the notification identified by
-// (tenantID, id). A notification in another tenant is reported as ErrNotFound.
-func (s *service) MarkRead(ctx context.Context, tenantID, id string) error {
-	return s.store.MarkRead(ctx, tenantID, id, time.Now().UTC())
+// MarkRead sets read_at to now for the notification owned by (tenantID, userID)
+// with the given id. A notification belonging to another tenant or another user
+// is reported as ErrNotFound.
+func (s *service) MarkRead(ctx context.Context, tenantID, userID, id string) error {
+	return s.store.MarkRead(ctx, tenantID, userID, id, time.Now().UTC())
 }
 
 // Subscribe persists a subscription row.
@@ -106,10 +107,11 @@ func (s *service) Subscribe(ctx context.Context, sub *Subscription) error {
 	return s.store.AddSubscription(ctx, subToStore(sub))
 }
 
-// Unsubscribe removes the subscription identified by (tenantID, id). A
-// subscription in another tenant is reported as ErrNotFound.
-func (s *service) Unsubscribe(ctx context.Context, tenantID, subscriptionID string) error {
-	return s.store.RemoveSubscription(ctx, tenantID, subscriptionID)
+// Unsubscribe removes the subscription owned by (tenantID, userID) with the
+// given id. A subscription belonging to another tenant or another user is
+// reported as ErrNotFound.
+func (s *service) Unsubscribe(ctx context.Context, tenantID, userID, subscriptionID string) error {
+	return s.store.RemoveSubscription(ctx, tenantID, userID, subscriptionID)
 }
 
 // emit fans a notification dispatch event to the optional audit emitter.

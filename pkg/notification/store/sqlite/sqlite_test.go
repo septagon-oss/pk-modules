@@ -78,10 +78,10 @@ func TestCrossTenantIsDenied(t *testing.T) {
 	}
 	// Mutations scoped to another tenant are denied (ErrNotFound), leaving the
 	// owner's rows intact.
-	if err := s.MarkRead(ctx, "tenant-2", "n1", time.Now().UTC()); !errors.Is(err, store.ErrNotFound) {
+	if err := s.MarkRead(ctx, "tenant-2", "user-1", "n1", time.Now().UTC()); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("cross-tenant MarkRead err = %v, want ErrNotFound", err)
 	}
-	if err := s.RemoveSubscription(ctx, "tenant-2", "sub1"); !errors.Is(err, store.ErrNotFound) {
+	if err := s.RemoveSubscription(ctx, "tenant-2", "user-1", "sub1"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("cross-tenant RemoveSubscription err = %v, want ErrNotFound", err)
 	}
 
@@ -187,7 +187,7 @@ func TestMarkRead(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	at := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	if err := s.MarkRead(ctx, "tenant-1", "n1", at); err != nil {
+	if err := s.MarkRead(ctx, "tenant-1", "user-1", "n1", at); err != nil {
 		t.Fatalf("MarkRead: %v", err)
 	}
 	got, err := s.GetByUser(ctx, "tenant-1", "user-1", 0, 0)
@@ -197,7 +197,7 @@ func TestMarkRead(t *testing.T) {
 	if got[0].ReadAt == nil || !got[0].ReadAt.Equal(at) {
 		t.Fatalf("ReadAt = %v, want %v", got[0].ReadAt, at)
 	}
-	if err := s.MarkRead(ctx, "tenant-1", "missing", at); !errors.Is(err, store.ErrNotFound) {
+	if err := s.MarkRead(ctx, "tenant-1", "user-1", "missing", at); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("MarkRead(missing) err = %v, want ErrNotFound", err)
 	}
 }
@@ -228,7 +228,7 @@ func TestSubscriptionLifecycle(t *testing.T) {
 		t.Fatalf("ListSubscriptions returned %d, want 2", len(list))
 	}
 
-	if err := s.RemoveSubscription(ctx, "tenant-1", "sub1"); err != nil {
+	if err := s.RemoveSubscription(ctx, "tenant-1", "user-1", "sub1"); err != nil {
 		t.Fatalf("RemoveSubscription: %v", err)
 	}
 	list, err = s.ListSubscriptions(ctx, "tenant-1", "user-1")
@@ -242,7 +242,7 @@ func TestSubscriptionLifecycle(t *testing.T) {
 		t.Fatalf("empty category should round-trip empty: %q", list[0].Category)
 	}
 
-	if err := s.RemoveSubscription(ctx, "tenant-1", "missing"); !errors.Is(err, store.ErrNotFound) {
+	if err := s.RemoveSubscription(ctx, "tenant-1", "user-1", "missing"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("RemoveSubscription(missing) err = %v, want ErrNotFound", err)
 	}
 }

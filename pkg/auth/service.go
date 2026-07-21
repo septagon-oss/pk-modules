@@ -52,6 +52,11 @@ type service struct {
 	audit      audit.AuditEmitter
 	sessionTTL time.Duration
 	now        func() time.Time
+	// decoyHash is a valid encoded hash produced once at construction. When a
+	// login targets a non-existent user or a user with no password set, we
+	// still run a full Verify against this decoy so the response time does not
+	// reveal whether the account exists (a user-enumeration timing oracle).
+	decoyHash string
 }
 
 func newService(
@@ -62,7 +67,7 @@ func newService(
 	emitter audit.AuditEmitter,
 	ttl time.Duration,
 ) *service {
-	return &service{
+	s := &service{
 		sessions:   sessions,
 		users:      users,
 		hasher:     hasher,
@@ -70,6 +75,24 @@ func newService(
 		audit:      emitter,
 		sessionTTL: ttl,
 		now:        time.Now,
+	}
+	// Precompute a decoy hash so absent-user login attempts still pay the
+	// hashing cost. A degenerate hasher that fails here simply yields an empty
+	// decoy; decoyVerify then no-ops rather than panicking.
+	if hasher != nil {
+		if h, err := hasher.Hash("decoy-password-not-used-for-auth"); err == nil {
+			s.decoyHash = h
+		}
+	}
+	return s
+}
+
+// decoyVerify runs a Verify against the precomputed decoy hash and discards
+// the result. It exists only to equalize the timing of login attempts that
+// short-circuit before reaching the real password comparison.
+func (s *service) decoyVerify(password string) {
+	if s.hasher != nil && s.decoyHash != "" {
+		_ = s.hasher.Verify(password, s.decoyHash)
 	}
 }
 
@@ -95,6 +118,7 @@ func (s *service) Login(ctx context.Context, tenantID string, creds Credentials)
 
 	u, err := s.lookupUser(ctx, tenantID, creds)
 	if err != nil {
+		s.decoyVerify(creds.Password)
 		s.policy.RecordFailure(ctx, tenantID, identifier)
 		s.emitFailure(ctx, tenantID, identifier, "user_not_found")
 		return nil, ErrInvalidCredentials
@@ -105,6 +129,7 @@ func (s *service) Login(ctx context.Context, tenantID string, creds Credentials)
 		return nil, ErrUserInactive
 	}
 	if u.PassHash == "" {
+		s.decoyVerify(creds.Password)
 		s.policy.RecordFailure(ctx, tenantID, identifier)
 		s.emitFailure(ctx, tenantID, identifier, "no_password_set")
 		return nil, ErrInvalidCredentials
@@ -114,6 +139,11 @@ func (s *service) Login(ctx context.Context, tenantID string, creds Credentials)
 		s.emitFailure(ctx, tenantID, identifier, "password_mismatch")
 		return nil, ErrInvalidCredentials
 	}
+	// Credentials are valid here. Record success now — before session
+	// persistence — so the throttle reservation taken by AllowLogin is always
+	// released even if a later internal step (session id, validation, store)
+	// fails; a broken session store must not leak throttle slots.
+	s.policy.RecordSuccess(ctx, tenantID, identifier)
 
 	sessionID, err := generateSessionID()
 	if err != nil {
@@ -133,7 +163,6 @@ func (s *service) Login(ctx context.Context, tenantID string, creds Credentials)
 	if err := s.sessions.Create(ctx, sess); err != nil {
 		return nil, fmt.Errorf("auth: persist session: %w", err)
 	}
-	s.policy.RecordSuccess(ctx, tenantID, identifier)
 	s.emitSuccess(ctx, tenantID, u.ID, identifier, sess.ID)
 	return sess, nil
 }

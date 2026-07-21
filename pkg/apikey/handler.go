@@ -17,6 +17,7 @@ import (
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/apikey/store"
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
 
 // tenantOf returns the tenant the request is authorized to act in, taken from
@@ -89,7 +90,7 @@ type issueResponse struct {
 }
 
 func (h *Handler) issue(w http.ResponseWriter, r *http.Request) {
-	tenant, ok := tenantOf(w, r)
+	tenant, subject, ok := portslib.RequestActor(w, r)
 	if !ok {
 		return
 	}
@@ -98,10 +99,13 @@ func (h *Handler) issue(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	// The tenant is authoritative from the request identity; a body-supplied
-	// tenant_id is ignored so a caller cannot mint keys for another tenant.
+	// Tenant AND user are authoritative from the request identity. A key is
+	// issued to the caller only: a body-supplied user_id (or tenant_id) is
+	// ignored, so a caller cannot mint a key that impersonates another user or
+	// another tenant. Issuing on behalf of a different user is a privileged
+	// operation not exposed by the OSS surface.
 	ttl := time.Duration(req.TTLSecond) * time.Second
-	plaintext, key, err := h.svc.Issue(r.Context(), tenant, req.UserID, req.Name, req.Scopes, ttl)
+	plaintext, key, err := h.svc.Issue(r.Context(), tenant, subject, req.Name, req.Scopes, ttl)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

@@ -153,17 +153,18 @@ func (s *Store) GetByUser(ctx context.Context, tenantID, userID string, limit, o
 	return out, nil
 }
 
-// MarkRead sets the read_at timestamp for the notification identified by
-// (tenantID, id). The tenant predicate is mandatory so a caller cannot mark
-// another tenant's notification read by ID.
-func (s *Store) MarkRead(ctx context.Context, tenantID, id string, at time.Time) error {
+// MarkRead sets the read_at timestamp for the notification owned by
+// (tenantID, userID) with the given id. The tenant AND user predicates are
+// mandatory so a caller cannot mark another user's (even a tenant-mate's)
+// notification read by ID.
+func (s *Store) MarkRead(ctx context.Context, tenantID, userID, id string, at time.Time) error {
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
 	res, err := s.db.ExecContext(
 		ctx,
-		`UPDATE notifications SET read_at = ? WHERE id = ? AND tenant_id = ?`,
-		at, id, tenantID,
+		`UPDATE notifications SET read_at = ? WHERE id = ? AND tenant_id = ? AND user_id = ?`,
+		at, id, tenantID, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("notification/sqlite: mark read: %w", err)
@@ -203,10 +204,10 @@ func (s *Store) AddSubscription(ctx context.Context, sub *store.Subscription) er
 // RemoveSubscription deletes the subscription identified by (tenantID, id). The
 // tenant predicate is mandatory so a caller cannot remove another tenant's
 // subscription by ID.
-func (s *Store) RemoveSubscription(ctx context.Context, tenantID, id string) error {
+func (s *Store) RemoveSubscription(ctx context.Context, tenantID, userID, id string) error {
 	res, err := s.db.ExecContext(
 		ctx,
-		`DELETE FROM notification_subscriptions WHERE id = ? AND tenant_id = ?`, id, tenantID,
+		`DELETE FROM notification_subscriptions WHERE id = ? AND tenant_id = ? AND user_id = ?`, id, tenantID, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("notification/sqlite: remove subscription: %w", err)
@@ -304,5 +305,9 @@ func isUniqueViolation(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "unique") || strings.Contains(msg, "constraint")
+	// Match only UNIQUE violations. sqlite phrases them "UNIQUE constraint
+	// failed: ..." and Postgres "violates unique constraint"; both contain
+	// "unique". Matching bare "constraint" was too broad — it mislabeled NOT
+	// NULL/CHECK/FK failures as duplicates (a spurious 409).
+	return strings.Contains(msg, "unique")
 }

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -347,6 +348,24 @@ func TestHandlerListRequiresTenant(t *testing.T) {
 	m.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous audit query = %d, want 401", rec.Code)
+	}
+}
+
+// TestHandlerRejectsWrites is the v0.2.2 regression for audit-log forgery over
+// HTTP: the audit trail is append-only from trusted in-process emitters, so the
+// HTTP surface must refuse every write verb with 405 rather than let a client
+// fabricate or backdate an entry.
+func TestHandlerRejectsWrites(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		req := withTenant(httptest.NewRequest(method, audit.APIPath,
+			strings.NewReader(`{"action":"forged","target":"x"}`)), "t-1")
+		rec := httptest.NewRecorder()
+		m.HTTPHandler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s %s = %d, want 405 (audit log is read-only)", method, audit.APIPath, rec.Code)
+		}
 	}
 }
 

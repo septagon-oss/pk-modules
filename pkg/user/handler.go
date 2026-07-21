@@ -137,6 +137,8 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Create(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
+		case errors.Is(err, ErrValidation), errors.Is(err, ErrUnknownTenant):
+			status = http.StatusBadRequest
 		case errors.Is(err, store.ErrDuplicateEmail),
 			errors.Is(err, store.ErrDuplicateUsername),
 			errors.Is(err, store.ErrUniqueConstraintViolation):
@@ -163,6 +165,8 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 	if err := h.svc.Update(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
+		case errors.Is(err, ErrValidation), errors.Is(err, ErrUnknownTenant):
+			status = http.StatusBadRequest
 		case errors.Is(err, store.ErrNotFound):
 			status = http.StatusNotFound
 		case errors.Is(err, store.ErrDuplicateEmail),

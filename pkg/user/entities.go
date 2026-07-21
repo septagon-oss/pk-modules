@@ -8,6 +8,7 @@ package user
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -31,24 +32,30 @@ const EntityName = "User"
 // APIPath is the canonical HTTP base path for user CRUD.
 const APIPath = "/api/v1/users"
 
+// ErrValidation wraps every field-level validation failure returned by
+// Validate. Handlers map errors.Is(err, ErrValidation) to HTTP 400 so a
+// malformed request body is never reported as a 500 (a client error is not a
+// server fault). It is the module's single "bad input" taxonomy anchor.
+var ErrValidation = errors.New("user: validation failed")
+
 // Validate enforces the small invariants required for storage. ID is
 // caller-assigned (UUID, ULID, slug — anything stable); the email, username,
-// and tenant_id are validated here.
+// and tenant_id are validated here. Every failure wraps ErrValidation.
 func (u *User) Validate() error {
 	if u == nil {
-		return errors.New("user: nil")
+		return fmt.Errorf("%w: user is nil", ErrValidation)
 	}
 	if strings.TrimSpace(u.TenantID) == "" {
-		return errors.New("user: tenant_id is required")
+		return fmt.Errorf("%w: tenant_id is required", ErrValidation)
 	}
 	if strings.TrimSpace(u.Email) == "" {
-		return errors.New("user: email is required")
+		return fmt.Errorf("%w: email is required", ErrValidation)
 	}
 	if !strings.Contains(u.Email, "@") {
-		return errors.New("user: email must contain '@'")
+		return fmt.Errorf("%w: email must contain '@'", ErrValidation)
 	}
 	if strings.TrimSpace(u.Username) == "" {
-		return errors.New("user: username is required")
+		return fmt.Errorf("%w: username is required", ErrValidation)
 	}
 	return nil
 }

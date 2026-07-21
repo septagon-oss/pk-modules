@@ -16,6 +16,7 @@ import (
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/content/store"
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
 
 // tenantOf returns the tenant the request is authorized to act in, taken from
@@ -123,7 +124,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
-	tenantID, ok := tenantOf(w, r)
+	tenantID, subject, ok := portslib.RequestActor(w, r)
 	if !ok {
 		return
 	}
@@ -132,9 +133,13 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	// The tenant is authoritative from the request identity; a body-supplied
-	// tenant_id is ignored so a caller cannot create rows in another tenant.
+	// Server-owned fields come from the request identity / server, never the
+	// body: tenant and author are the authenticated caller, and the ID is
+	// generated server-side. A client cannot forge cross-tenant rows, spoof the
+	// author, or choose a predictable/colliding ID.
 	c.TenantID = tenantID
+	c.AuthorID = subject
+	c.ID = ""
 	if err := h.svc.Create(r.Context(), &c); err != nil {
 		writeError(w, err)
 		return

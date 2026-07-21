@@ -11,8 +11,8 @@ package audit
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
@@ -48,15 +48,17 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle(APIPath, h)
 }
 
-// ServeHTTP dispatches to the appropriate handler method.
+// ServeHTTP dispatches to the appropriate handler method. The audit HTTP
+// surface is READ-ONLY: the log is written only by the in-process audit
+// emitter (login, key issue/revoke, admin actions, …), never by an HTTP client.
+// A public write endpoint would let any authenticated tenant user forge
+// fabricated or backdated audit events, so it is not exposed.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		h.list(w, r)
-	case http.MethodPost:
-		h.record(w, r)
 	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "the audit log is read-only over HTTP", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -108,26 +110,6 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, events)
-}
-
-func (h *Handler) record(w http.ResponseWriter, r *http.Request) {
-	tenant, ok := tenantOf(w, r)
-	if !ok {
-		return
-	}
-	var e Event
-	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
-		return
-	}
-	// The event is stamped with the caller's tenant; a body-supplied tenant_id
-	// is ignored so a caller cannot forge audit events into another tenant.
-	e.TenantID = tenant
-	if err := h.svc.Record(r.Context(), &e); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusCreated, &e)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

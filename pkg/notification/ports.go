@@ -19,9 +19,9 @@ import (
 type NotificationService interface {
 	Create(ctx context.Context, n *portslib.Notification) error
 	GetByUser(ctx context.Context, tenantID, userID string, limit, offset int) ([]*portslib.Notification, error)
-	MarkRead(ctx context.Context, tenantID, notificationID string) error
+	MarkRead(ctx context.Context, tenantID, userID, notificationID string) error
 	Subscribe(ctx context.Context, sub *Subscription) error
-	Unsubscribe(ctx context.Context, tenantID, subscriptionID string) error
+	Unsubscribe(ctx context.Context, tenantID, userID, subscriptionID string) error
 }
 
 // NotificationSubscriber lets other modules register additional channels at

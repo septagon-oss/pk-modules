@@ -6,6 +6,7 @@ package apikey_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"maps"
@@ -142,6 +143,55 @@ func TestIssueProducesPlaintextAndStoresHash(t *testing.T) {
 	}
 	if key.Prefix == "" || !strings.Contains(plaintext, key.Prefix) {
 		t.Fatalf("Issue prefix %q not embedded in plaintext %q", key.Prefix, plaintext)
+	}
+}
+
+// TestIssueIgnoresBodyIdentity is the v0.2.2 regression for the key-issuance
+// impersonation hole: the HTTP issue endpoint must bind the new key to the
+// authenticated principal, never to a body-supplied user_id/tenant_id. Alice
+// posts user_id=u-bob & tenant_id=t-evil; the minted key must belong to alice
+// in t-1.
+func TestIssueIgnoresBodyIdentity(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+
+	body := strings.NewReader(`{"user_id":"u-bob","tenant_id":"t-evil","name":"k","scopes":["read"]}`)
+	req := httptest.NewRequest(http.MethodPost, apikey.APIPath, body)
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(),
+		identity.Principal{Subject: "u-alice", TenantID: "t-1", AuthMethod: "session"}))
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("issue = %d, want 201 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Key *apikey.APIKey `json:"key"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v (body=%s)", err, rec.Body.String())
+	}
+	if resp.Key == nil {
+		t.Fatalf("issue response missing key")
+	}
+	if resp.Key.UserID != "u-alice" {
+		t.Fatalf("key UserID = %q, want u-alice — body user_id was honored (impersonation)", resp.Key.UserID)
+	}
+	if resp.Key.TenantID != "t-1" {
+		t.Fatalf("key TenantID = %q, want t-1 — body tenant_id was honored", resp.Key.TenantID)
+	}
+}
+
+// TestIssueRequiresPrincipal confirms an unauthenticated issue attempt is 401,
+// never an anonymous key.
+func TestIssueRequiresPrincipal(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(http.MethodPost, apikey.APIPath, strings.NewReader(`{"name":"k"}`))
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous issue = %d, want 401", rec.Code)
 	}
 }
 

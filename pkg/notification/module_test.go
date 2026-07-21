@@ -72,6 +72,50 @@ func TestNotificationReadIsSelfOnly(t *testing.T) {
 	}
 }
 
+// TestNotificationMarkReadIsSelfOnly is the v0.2.2 regression for the
+// same-tenant cross-user write IDOR: a tenant-mate must not be able to mark
+// another user's notification read (or delete their subscription) by ID. Alice,
+// knowing bob's notification ID, gets 404 and bob's notification stays unread.
+func TestNotificationMarkReadIsSelfOnly(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+
+	bob := portslib.Notification{TenantID: "t-1", UserID: "u-bob", Title: "for-bob", Body: "x", Category: "system", Severity: "info"}
+	if err := m.Service().Create(ctx, &bob); err != nil {
+		t.Fatalf("seed bob notification: %v", err)
+	}
+	if bob.ID == "" {
+		t.Fatalf("seeded notification has no ID")
+	}
+
+	// The item route (/{id}/read) is only reachable through the registered mux,
+	// not the bare collection ServeHTTP.
+	mux := http.NewServeMux()
+	m.HTTPHandler().RegisterRoutes(mux)
+	markRead := func(subject string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, notification.APIPath+"/"+bob.ID+"/read", nil)
+		req = req.WithContext(identity.ContextWithPrincipal(req.Context(),
+			identity.Principal{Subject: subject, TenantID: "t-1", AuthMethod: "session"}))
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// Alice (a tenant-mate) tries to mark bob's notification read by ID.
+	if rec := markRead("u-alice"); rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-user mark-read = %d, want 404 (not found for a non-owner) body=%q", rec.Code, rec.Body.String())
+	}
+	// The 404 proves the store UPDATE matched zero rows because the user_id
+	// predicate excluded alice — bob's row was untouched.
+
+	// Bob marking his own notification read succeeds (204), confirming the ID
+	// and tenant were correct and only the owner check differed.
+	if rec := markRead("u-bob"); rec.Code != http.StatusNoContent {
+		t.Fatalf("owner mark-read = %d, want 204 body=%q", rec.Code, rec.Body.String())
+	}
+}
+
 func sqliteDSN(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -230,10 +274,10 @@ func TestMarkRead(t *testing.T) {
 	if err := m.Service().Create(ctx, n); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := m.Service().MarkRead(ctx, "t-1", n.ID); err != nil {
+	if err := m.Service().MarkRead(ctx, "t-1", "u-1", n.ID); err != nil {
 		t.Fatalf("MarkRead: %v", err)
 	}
-	if err := m.Service().MarkRead(ctx, "t-1", "missing"); err == nil {
+	if err := m.Service().MarkRead(ctx, "t-1", "u-1", "missing"); err == nil {
 		t.Fatalf("MarkRead on missing ID should error")
 	}
 }
@@ -254,10 +298,10 @@ func TestSubscribeAndUnsubscribe(t *testing.T) {
 	if sub.ID == "" {
 		t.Fatalf("Subscribe did not assign ID")
 	}
-	if err := m.Service().Unsubscribe(ctx, "t-1", sub.ID); err != nil {
+	if err := m.Service().Unsubscribe(ctx, "t-1", "u-1", sub.ID); err != nil {
 		t.Fatalf("Unsubscribe: %v", err)
 	}
-	if err := m.Service().Unsubscribe(ctx, "t-1", sub.ID); err == nil {
+	if err := m.Service().Unsubscribe(ctx, "t-1", "u-1", sub.ID); err == nil {
 		t.Fatalf("second Unsubscribe should return ErrNotFound")
 	}
 }
