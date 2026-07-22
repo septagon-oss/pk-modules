@@ -1,163 +1,191 @@
-/* _admin.css — minimal hand-written stylesheet for the OSS admin shell.
+/* _admin.css — the admin shell's rules, organized by atomic-design tier
+ * (atoms -> molecules -> organisms), per ADR-0031.
  *
- * v0.1.0 ships a hand-tuned ~100-line CSS so the admin remains self-contained
- * and renderable in a browser without an external build step. v0.0.1 will
- * generate this file from pk-design tokens so OSS and Pro stay visually in
- * sync.
- *
- * Convention: light theme, neutral colors, system sans-serif body, monospace
- * tables, simple form layout. Avoid heavy frameworks.
+ * The token layer (:root { --pk-* }) is NOT in this file — it is generated from
+ * a pk-design DTCG token set by tokens.CSSVars and prepended when the shell
+ * serves this stylesheet (see admin/tokens.go). Every rule below references
+ * those custom properties (with a literal fallback so the file still renders
+ * standalone). Re-theme by editing the token set, not this file.
  */
 
+/* Fonts are not themed here. */
 :root {
-  --pk-bg: #ffffff;
-  --pk-fg: #1f2937;
-  --pk-muted: #6b7280;
-  --pk-border: #e5e7eb;
-  --pk-accent: #2563eb;
-  --pk-accent-fg: #ffffff;
-  --pk-row-alt: #f9fafb;
-  --pk-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --pk-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --pk-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --pk-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
 
+/* ============================================================ ATOMS === */
+
 body {
   margin: 0;
-  font-family: var(--pk-sans);
-  color: var(--pk-fg);
-  background: var(--pk-bg);
+  font-family: var(--pk-font-sans);
+  color: var(--pk-color-text-primary, #111827);
+  background: var(--pk-color-surface-canvas, #f6f7f9);
   line-height: 1.5;
-}
-
-header.pk-admin-header {
-  border-bottom: 1px solid var(--pk-border);
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-header.pk-admin-header h1 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.pk-admin-layout {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  min-height: calc(100vh - 60px);
-}
-
-aside.pk-admin-sidebar {
-  border-right: 1px solid var(--pk-border);
-  padding: 16px;
-  background: var(--pk-row-alt);
-}
-
-aside.pk-admin-sidebar h2 {
-  margin: 12px 0 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--pk-muted);
-}
-
-aside.pk-admin-sidebar ul {
-  list-style: none;
-  margin: 0 0 12px;
-  padding: 0;
-}
-
-aside.pk-admin-sidebar li a {
-  display: block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  color: var(--pk-fg);
-  text-decoration: none;
   font-size: 14px;
 }
 
-aside.pk-admin-sidebar li a:hover {
-  background: var(--pk-bg);
+a { color: var(--pk-color-accent-default, #4f46e5); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, .pk-mono { font-family: var(--pk-font-mono); font-size: 12.5px; }
+
+.pk-muted { color: var(--pk-color-text-muted, #6b7280); }
+
+/* atom: monospace chip (module id, badges) */
+.pk-chip {
+  background: var(--pk-color-surface-muted, #f9fafb);
+  border: 1px solid var(--pk-color-border-default, #e5e7eb);
+  color: var(--pk-color-text-muted, #6b7280);
+  padding: 1px 7px;
+  border-radius: var(--pk-radius-pill, 999px);
+  font-size: 11.5px;
 }
 
-main.pk-admin-content {
-  padding: 24px;
+/* atom: inline API path */
+.pk-path { color: var(--pk-color-text-muted, #6b7280); }
+
+/* atom: status pill */
+.pk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--pk-radius-pill, 999px);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.pk-pill-ok {
+  background: var(--pk-color-status-okbg, #ecfdf5);
+  color: var(--pk-color-status-ok, #059669);
 }
 
-main.pk-admin-content h2 {
-  margin-top: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-main.pk-admin-content p { margin: 8px 0; color: var(--pk-fg); }
-main.pk-admin-content .pk-muted { color: var(--pk-muted); }
-
-table.pk-admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--pk-mono);
+/* atom: button / action link */
+.pk-btn {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: var(--pk-radius-sm, 6px);
+  border: 1px solid var(--pk-color-border-default, #e5e7eb);
+  background: var(--pk-color-surface-primary, #fff);
+  color: var(--pk-color-text-primary, #111827);
   font-size: 13px;
-  margin-top: 12px;
+  font-weight: 500;
+}
+.pk-btn:hover {
+  text-decoration: none;
+  border-color: var(--pk-color-accent-default, #4f46e5);
+  color: var(--pk-color-accent-default, #4f46e5);
 }
 
-table.pk-admin-table th,
-table.pk-admin-table td {
-  border-bottom: 1px solid var(--pk-border);
-  padding: 8px 10px;
-  text-align: left;
-  vertical-align: top;
-}
-
-table.pk-admin-table th {
-  background: var(--pk-row-alt);
-  font-weight: 600;
-  color: var(--pk-muted);
-}
-
-table.pk-admin-table tr:nth-child(even) td { background: var(--pk-row-alt); }
-
-form.pk-admin-form { display: grid; gap: 12px; max-width: 480px; margin-top: 12px; }
-
-form.pk-admin-form label {
-  display: flex;
-  flex-direction: column;
-  font-size: 13px;
-  color: var(--pk-muted);
-}
-
+/* atom: form controls */
+form.pk-admin-form { display: grid; gap: var(--pk-space-3, 12px); max-width: 480px; margin-top: var(--pk-space-3, 12px); }
+form.pk-admin-form label { display: flex; flex-direction: column; font-size: 13px; color: var(--pk-color-text-muted, #6b7280); }
 form.pk-admin-form input,
 form.pk-admin-form textarea {
   font: inherit;
-  padding: 6px 8px;
-  border: 1px solid var(--pk-border);
-  border-radius: 4px;
-  background: var(--pk-bg);
-  color: var(--pk-fg);
+  padding: 7px 9px;
+  border: 1px solid var(--pk-color-border-default, #e5e7eb);
+  border-radius: var(--pk-radius-sm, 6px);
+  background: var(--pk-color-surface-primary, #fff);
+  color: var(--pk-color-text-primary, #111827);
 }
-
 form.pk-admin-form button {
   justify-self: start;
   padding: 8px 14px;
   border: 0;
-  border-radius: 4px;
-  background: var(--pk-accent);
-  color: var(--pk-accent-fg);
+  border-radius: var(--pk-radius-sm, 6px);
+  background: var(--pk-color-accent-default, #4f46e5);
+  color: var(--pk-color-accent-on, #fff);
   font: inherit;
+  font-weight: 500;
   cursor: pointer;
 }
 
-code, .pk-mono { font-family: var(--pk-mono); font-size: 13px; }
+/* ======================================================= MOLECULES === */
 
-.pk-card {
-  border: 1px solid var(--pk-border);
-  border-radius: 6px;
-  padding: 14px 16px;
-  margin: 8px 0;
-  background: var(--pk-bg);
+/* molecule: top bar */
+header.pk-admin-header {
+  border-bottom: 1px solid var(--pk-color-border-default, #e5e7eb);
+  background: var(--pk-color-surface-primary, #fff);
+  padding: var(--pk-space-3, 12px) var(--pk-space-5, 24px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+header.pk-admin-header h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+
+/* molecule: sidebar nav */
+aside.pk-admin-sidebar { padding: var(--pk-space-4, 16px) var(--pk-space-3, 12px); }
+aside.pk-admin-sidebar h2 {
+  margin: var(--pk-space-4, 16px) var(--pk-space-2, 8px) var(--pk-space-1, 4px);
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--pk-color-text-muted, #6b7280);
+}
+aside.pk-admin-sidebar h2:first-child { margin-top: 0; }
+aside.pk-admin-sidebar ul { list-style: none; margin: 0 0 var(--pk-space-3, 12px); padding: 0; }
+aside.pk-admin-sidebar li a {
+  display: block; padding: 5px var(--pk-space-2, 8px); border-radius: var(--pk-radius-sm, 6px);
+  color: var(--pk-color-text-primary, #111827); font-size: 13.5px;
+}
+aside.pk-admin-sidebar li a:hover { background: var(--pk-color-surface-muted, #f9fafb); text-decoration: none; }
+
+/* molecule: page header row */
+.pk-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--pk-space-4, 16px); margin-bottom: var(--pk-space-5, 24px); }
+.pk-page-head h2 { margin: 0 0 2px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.pk-page-head p { margin: 0; }
+
+/* molecule: stat tile */
+.pk-stat {
+  background: var(--pk-color-surface-primary, #fff);
+  border: 1px solid var(--pk-color-border-default, #e5e7eb);
+  border-radius: var(--pk-radius-md, 10px);
+  padding: var(--pk-space-4, 16px);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.pk-stat-num { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+.pk-stat-label { font-size: 12.5px; color: var(--pk-color-text-muted, #6b7280); }
+
+/* molecule: a collection row link inside a card */
+.pk-row-link {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-3, 12px);
+  padding: 6px var(--pk-space-2, 8px); margin: 0 calc(-1 * var(--pk-space-2, 8px));
+  border-radius: var(--pk-radius-sm, 6px); color: var(--pk-color-text-primary, #111827); font-size: 13.5px;
+}
+.pk-row-link:hover { background: var(--pk-color-surface-muted, #f9fafb); text-decoration: none; }
+
+/* ======================================================= ORGANISMS === */
+
+/* organism: app shell */
+.pk-admin-layout { display: grid; grid-template-columns: 232px 1fr; min-height: calc(100vh - 54px); }
+aside.pk-admin-sidebar { border-right: 1px solid var(--pk-color-border-default, #e5e7eb); background: var(--pk-color-surface-primary, #fff); }
+main.pk-admin-content { padding: var(--pk-space-5, 24px); max-width: 1180px; }
+main.pk-admin-content h2 { margin-top: 0; }
+
+.pk-section-title { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--pk-color-text-muted, #6b7280); margin: var(--pk-space-6, 32px) 0 var(--pk-space-3, 12px); }
+
+/* organism: stat row */
+.pk-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--pk-space-3, 12px); }
+
+/* organism: module card grid */
+.pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--pk-space-3, 12px); }
+.pk-card {
+  border: 1px solid var(--pk-color-border-default, #e5e7eb);
+  border-radius: var(--pk-radius-md, 10px);
+  padding: var(--pk-space-4, 16px);
+  background: var(--pk-color-surface-primary, #fff);
+  display: flex; flex-direction: column;
+}
+.pk-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-2, 8px); }
+.pk-card-head h4 { margin: 0; font-size: 15px; font-weight: 600; }
+.pk-card-desc { margin: 6px 0 0; font-size: 13px; }
+.pk-card-block { margin-top: var(--pk-space-3, 12px); }
+.pk-card-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pk-color-text-muted, #6b7280); margin-bottom: 2px; }
+.pk-card-actions { margin-top: var(--pk-space-3, 12px); display: flex; flex-wrap: wrap; gap: var(--pk-space-2, 8px); }
+.pk-card-actions .pk-btn::after { content: " \2192"; opacity: 0.6; } /* decorative arrow; link text stays the title */
+
+/* organism: entity table */
+table.pk-admin-table { width: 100%; border-collapse: collapse; font-family: var(--pk-font-mono); font-size: 13px; margin-top: var(--pk-space-3, 12px); }
+table.pk-admin-table th, table.pk-admin-table td { border-bottom: 1px solid var(--pk-color-border-default, #e5e7eb); padding: 8px 10px; text-align: left; vertical-align: top; }
+table.pk-admin-table th { background: var(--pk-color-surface-muted, #f9fafb); font-weight: 600; color: var(--pk-color-text-muted, #6b7280); }

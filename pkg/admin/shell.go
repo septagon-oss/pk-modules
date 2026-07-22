@@ -30,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"sort"
 	"strings"
@@ -74,6 +75,9 @@ type Shell struct {
 	// produced cross-page render failures.
 	templates map[string]*template.Template
 	static    http.Handler
+	// css is the served stylesheet: the pk-design token :root block generated
+	// by tokens.CSSVars, followed by the embedded atomic rules. Composed once.
+	css []byte
 }
 
 // NewShell constructs a Shell with the given options. Empty Title and
@@ -95,7 +99,23 @@ func NewShell(opts ShellOptions) *Shell {
 	}
 	s.templates = parsePageTemplates()
 	s.static = http.StripPrefix(basePath+"/static/", http.FileServer(http.FS(adminstatic.FS())))
+	s.css = composeCSS()
 	return s
+}
+
+// composeCSS builds the served stylesheet: the pk-design token :root block
+// (generated from adminTokenSet) followed by the embedded atomic rules, which
+// reference those custom properties.
+func composeCSS() []byte {
+	rules, err := fs.ReadFile(adminstatic.FS(), "_admin.css")
+	if err != nil {
+		rules = nil
+	}
+	out := make([]byte, 0, len(rules)+256)
+	out = append(out, adminTokenCSS()...)
+	out = append(out, '\n')
+	out = append(out, rules...)
+	return out
 }
 
 // parsePageTemplates parses each page template (home, entity_list,
@@ -231,9 +251,15 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	urlPath := r.URL.Path
 
-	// Static assets.
+	// Static assets. The stylesheet is served from the composed CSS (pk-design
+	// token :root block + atomic rules); everything else from the embedded FS.
 	staticPrefix := s.basePath + "/static/"
 	if strings.HasPrefix(urlPath, staticPrefix) {
+		if urlPath == staticPrefix+"_admin.css" {
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			_, _ = w.Write(s.css)
+			return
+		}
 		s.static.ServeHTTP(w, r)
 		return
 	}
@@ -301,9 +327,21 @@ func (s *Shell) findEntity(moduleID, entityName string) (EntityCRUD, bool) {
 
 // moduleSummary groups entities and pages for the home template.
 type moduleSummary struct {
-	ModuleID string
-	Entities []EntityCRUD
-	Pages    []portslib.AdminPage
+	ModuleID    string
+	DisplayName string
+	Description string
+	Entities    []EntityCRUD
+	Pages       []portslib.AdminPage
+}
+
+// homeStats are the at-a-glance counts shown as tiles on the dashboard. They
+// are derived from the registered admin surfaces (no data-source access), so
+// they describe the composed app rather than live row counts.
+type homeStats struct {
+	Modules     int
+	Collections int
+	Endpoints   int
+	Pages       int
 }
 
 type homeData struct {
@@ -312,6 +350,53 @@ type homeData struct {
 	BasePath  string
 	Sidebar   []portslib.SidebarSection
 	Modules   []moduleSummary
+	Stats     homeStats
+}
+
+// moduleDisplayNames and moduleDescriptions humanize the built-in modules on
+// the dashboard. Unknown (contributed) modules fall back to a humanized ID and
+// no description.
+var moduleDisplayNames = map[string]string{
+	"tenant_management":       "Tenants",
+	"user_management":         "Users",
+	"auth_management":         "Authentication",
+	"api_key_management":      "API Keys",
+	"audit_management":        "Audit",
+	"content_management":      "Content",
+	"notification_management": "Notifications",
+	"admin_management":        "Admin",
+	"health_management":       "Health",
+}
+
+var moduleDescriptions = map[string]string{
+	"tenant_management":       "Tenants — the root every other module's data is scoped to.",
+	"user_management":         "Users, credentials, and profiles.",
+	"auth_management":         "Sessions: login, logout, and the login-lockout policy.",
+	"api_key_management":      "API keys — issue, verify, and revoke programmatic access.",
+	"audit_management":        "The append-only audit trail (read-only over HTTP).",
+	"content_management":      "Tenant-scoped content with slugs and publishing.",
+	"notification_management": "Per-user notifications and channel subscriptions.",
+	"admin_management":        "This admin console and its registered surfaces.",
+	"health_management":       "Aggregated per-module health at /healthz.",
+}
+
+// humanizeModuleID turns "some_thing_management" into "Some Thing".
+func humanizeModuleID(id string) string {
+	if n, ok := moduleDisplayNames[id]; ok {
+		return n
+	}
+	s := strings.TrimSuffix(id, "_management")
+	words := strings.FieldsFunc(s, func(r rune) bool { return r == '_' || r == '-' })
+	for i, w := range words {
+		if w == "" {
+			continue
+		}
+		words[i] = strings.ToUpper(w[:1]) + w[1:]
+	}
+	if len(words) == 0 {
+		return id
+	}
+	return strings.Join(words, " ")
 }
 
 type entityListData struct {
@@ -332,12 +417,20 @@ type entityFormData struct {
 }
 
 func (s *Shell) renderHome(w http.ResponseWriter, _ *http.Request) {
+	mods := s.modulesSummary()
+	stats := homeStats{Modules: len(mods)}
+	for _, m := range mods {
+		stats.Collections += len(m.Entities)
+		stats.Endpoints += len(m.Entities) // one canonical REST resource per entity
+		stats.Pages += len(m.Pages)
+	}
 	data := homeData{
 		Title:     s.title,
 		PageTitle: "Dashboard",
 		BasePath:  s.basePath,
 		Sidebar:   s.SidebarSections(),
-		Modules:   s.modulesSummary(),
+		Modules:   mods,
+		Stats:     stats,
 	}
 	s.render(w, "home", data)
 }
@@ -414,7 +507,10 @@ func (s *Shell) modulesSummary() []moduleSummary {
 	sort.Strings(order)
 	out := make([]moduleSummary, 0, len(order))
 	for _, id := range order {
-		out = append(out, *byID[id])
+		ms := *byID[id]
+		ms.DisplayName = humanizeModuleID(id)
+		ms.Description = moduleDescriptions[id]
+		out = append(out, ms)
 	}
 	return out
 }

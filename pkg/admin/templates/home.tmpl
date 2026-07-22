@@ -1,20 +1,62 @@
 {{define "home"}}{{template "layout" .}}{{end}}
 {{define "content"}}
-<h2>Dashboard</h2>
-<p class="pk-muted">{{len .Modules}} module(s) have registered admin surfaces.</p>
-{{range .Modules}}
-<div class="pk-card">
-  <h3 style="margin:0 0 6px">{{.ModuleID}}</h3>
-  {{if .Entities}}
-  <p class="pk-muted" style="margin:0 0 4px">Entities</p>
-  <ul>{{range .Entities}}<li><a href="{{$.BasePath}}/{{.ModuleID}}/{{.EntityName}}">{{.EntityName}}</a> <code class="pk-mono">{{.APIPath}}</code></li>{{end}}</ul>
-  {{end}}
-  {{if .Pages}}
-  <p class="pk-muted" style="margin:0 0 4px">Pages</p>
-  <ul>{{range .Pages}}<li><a href="{{.Path}}">{{.Title}}</a></li>{{end}}</ul>
+<div class="pk-page-head">
+  <div>
+    <h2>Dashboard</h2>
+    <p class="pk-muted">Overview of the composed application and its admin surfaces.</p>
+  </div>
+  <span class="pk-pill pk-pill-ok">● Operational</span>
+</div>
+
+<div class="pk-stats">
+  <div class="pk-stat">
+    <span class="pk-stat-num">{{.Stats.Modules}}</span>
+    <span class="pk-stat-label">Modules</span>
+  </div>
+  <div class="pk-stat">
+    <span class="pk-stat-num">{{.Stats.Collections}}</span>
+    <span class="pk-stat-label">Collections</span>
+  </div>
+  <div class="pk-stat">
+    <span class="pk-stat-num">{{.Stats.Endpoints}}</span>
+    <span class="pk-stat-label">REST resources</span>
+  </div>
+  <div class="pk-stat">
+    <span class="pk-stat-num">{{.Stats.Pages}}</span>
+    <span class="pk-stat-label">Admin pages</span>
+  </div>
+</div>
+
+<h3 class="pk-section-title">Modules</h3>
+<div class="pk-grid">
+  {{range .Modules}}
+  <div class="pk-card">
+    <div class="pk-card-head">
+      <h4>{{.DisplayName}}</h4>
+      <code class="pk-mono pk-chip">{{.ModuleID}}</code>
+    </div>
+    {{if .Description}}<p class="pk-muted pk-card-desc">{{.Description}}</p>{{end}}
+
+    {{if .Entities}}
+    <div class="pk-card-block">
+      <span class="pk-card-label">Collections</span>
+      {{range .Entities}}
+      <a class="pk-row-link" href="{{$.BasePath}}/{{.ModuleID}}/{{.EntityName}}">
+        <span>{{.EntityName}}</span>
+        <code class="pk-mono pk-path">{{.APIPath}}</code>
+      </a>
+      {{end}}
+    </div>
+    {{end}}
+
+    {{if .Pages}}
+    <div class="pk-card-actions">
+      {{range .Pages}}<a class="pk-btn" href="{{.Path}}">{{.Title}}</a>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="pk-muted">No admin surfaces have been registered yet.</p>
   {{end}}
 </div>
-{{else}}
-<p class="pk-muted">No admin surfaces have been registered yet.</p>
-{{end}}
 {{end}}
