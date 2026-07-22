@@ -69,6 +69,18 @@ func (c *Content) Validate() error {
 	if strings.TrimSpace(c.Title) == "" {
 		return errors.New("content: title is required")
 	}
+	// Bound the short identifier/label fields so a caller cannot store an
+	// absurd multi-kilobyte slug or title. The body is intentionally uncapped
+	// here (it is the payload) and is bounded by the host's request-body limit.
+	if len(c.Slug) > 200 {
+		return errors.New("content: slug must be at most 200 characters")
+	}
+	if len(c.Kind) > 50 {
+		return errors.New("content: kind must be at most 50 characters")
+	}
+	if len(c.Title) > 300 {
+		return errors.New("content: title must be at most 300 characters")
+	}
 	switch c.BodyFormat {
 	case "", BodyFormatMarkdown, BodyFormatHTML, BodyFormatText:
 	default:
