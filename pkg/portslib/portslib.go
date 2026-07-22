@@ -69,17 +69,18 @@ type HealthRegistrar interface {
 }
 
 // Notification is the canonical in-app notification record. Severity values
-// are restricted to "info", "warning", and "critical" in v0.1.0.
+// are restricted to "info", "warning", and "critical". JSON field names are
+// snake_case, consistent with every other module's API surface.
 type Notification struct {
-	ID        string
-	TenantID  string
-	UserID    string
-	Title     string
-	Body      string
-	Category  string
-	Severity  string
-	Data      map[string]any
-	EmittedAt time.Time
+	ID        string         `json:"id"`
+	TenantID  string         `json:"tenant_id"`
+	UserID    string         `json:"user_id"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	Category  string         `json:"category"`
+	Severity  string         `json:"severity"`
+	Data      map[string]any `json:"data,omitempty"`
+	EmittedAt time.Time      `json:"emitted_at"`
 }
 
 // NotificationChannel is satisfied by the built-in in-app channel; Pro adds
