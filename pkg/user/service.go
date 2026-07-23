@@ -193,6 +193,9 @@ func (s *service) SetPassword(ctx context.Context, tenantID, id, plaintext strin
 	if plaintext == "" {
 		return errors.New("user: plaintext is required")
 	}
+	if err := validatePassword(plaintext); err != nil {
+		return err
+	}
 	if s.hasher == nil {
 		return errors.New("user: no hasher configured")
 	}

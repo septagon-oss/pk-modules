@@ -39,6 +39,7 @@ type QueryFilter struct {
 	Since    time.Time
 	Until    time.Time
 	Limit    int
+	Offset   int
 }
 
 // Store is the persistence contract for audit_management. The OSS surface is
@@ -49,7 +50,7 @@ type Store interface {
 	// when the event ID is already in use.
 	Append(ctx context.Context, e *Event) error
 	// Query returns matching events ordered chronologically (oldest first),
-	// capped by the filter's Limit.
+	// paged by the filter's Limit and Offset.
 	Query(ctx context.Context, f QueryFilter) ([]*Event, error)
 }
 

@@ -36,6 +36,7 @@ type QueryFilter struct {
 	Since    time.Time
 	Until    time.Time
 	Limit    int
+	Offset   int
 }
 
 // AuditEmitter is a convenience for non-audit modules that want to emit

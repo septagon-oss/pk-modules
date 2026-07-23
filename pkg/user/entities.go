@@ -35,11 +35,23 @@ const EntityName = "User"
 // APIPath is the canonical HTTP base path for user CRUD.
 const APIPath = "/api/v1/users"
 
+// MaxPasswordBytes is the portable password-input ceiling. The default bcrypt
+// provider rejects inputs beyond 72 bytes, so the HTTP and admin surfaces
+// enforce that bound before mutating a user profile.
+const MaxPasswordBytes = 72
+
 // ErrValidation wraps every field-level validation failure returned by
 // Validate. Handlers map errors.Is(err, ErrValidation) to HTTP 400 so a
 // malformed request body is never reported as a 500 (a client error is not a
 // server fault). It is the module's single "bad input" taxonomy anchor.
 var ErrValidation = errors.New("user: validation failed")
+
+func validatePassword(plaintext string) error {
+	if len([]byte(plaintext)) > MaxPasswordBytes {
+		return fmt.Errorf("%w: password must be at most %d bytes", ErrValidation, MaxPasswordBytes)
+	}
+	return nil
+}
 
 // Validate enforces the small invariants required for storage. ID is
 // caller-assigned (UUID, ULID, slug — anything stable); the email, username,

@@ -189,6 +189,13 @@ func TestQueryLimitCap(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("Query(limit=2) returned %d, want 2", len(got))
 	}
+	page, err := s.Query(ctx, store.QueryFilter{TenantID: "tenant-1", Limit: 2, Offset: 2})
+	if err != nil {
+		t.Fatalf("Query(offset=2): %v", err)
+	}
+	if len(page) != 2 || page[0].ID != "c" || page[1].ID != "d" {
+		t.Fatalf("Query(limit=2, offset=2) = %+v, want events c and d", page)
+	}
 }
 
 func TestAppendNil(t *testing.T) {

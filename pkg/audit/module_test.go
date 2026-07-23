@@ -310,6 +310,8 @@ func TestHandlerListRejectsMalformedQueryParams(t *testing.T) {
 		{"bad until", "/api/v1/audit-events?until=2026-13-99T00:00:00Z"},
 		{"bad limit", "/api/v1/audit-events?limit=abc"},
 		{"negative limit", "/api/v1/audit-events?limit=-3"},
+		{"bad offset", "/api/v1/audit-events?offset=abc"},
+		{"negative offset", "/api/v1/audit-events?offset=-1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -328,12 +330,43 @@ func TestHandlerListAcceptsValidQueryParams(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
 	req := withTenant(httptest.NewRequest(http.MethodGet,
-		"/api/v1/audit-events?since=2026-01-01T00:00:00Z&until=2027-01-01T00:00:00Z&limit=10",
+		"/api/v1/audit-events?since=2026-01-01T00:00:00Z&until=2027-01-01T00:00:00Z&limit=10&offset=0",
 		nil), "t-1")
 	rec := httptest.NewRecorder()
 	m.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandlerListAppliesOffset(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	for i, id := range []string{"first", "second", "third"} {
+		if err := m.Service().Record(ctx, &audit.Event{
+			ID: id, TenantID: "t-1", Action: "test", EmittedAt: base.Add(time.Duration(i) * time.Minute),
+		}); err != nil {
+			t.Fatalf("Record(%s): %v", id, err)
+		}
+	}
+	req := withTenant(httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/audit-events?limit=1&offset=1",
+		nil,
+	), "t-1")
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var events []audit.Event
+	if err := json.NewDecoder(rec.Body).Decode(&events); err != nil {
+		t.Fatalf("decode events: %v", err)
+	}
+	if len(events) != 1 || events[0].ID != "second" {
+		t.Fatalf("events = %+v, want second page", events)
 	}
 }
 

@@ -85,8 +85,8 @@ func (s *service) List(ctx context.Context, tenantID, kind string, limit, offset
 	return out, nil
 }
 
-// Update replaces the mutable fields of an existing row. CreatedAt is
-// preserved by the store layer.
+// Update replaces the mutable fields of an existing row. Server-owned
+// authorship, publication state, and creation time are preserved.
 func (s *service) Update(ctx context.Context, c *Content) error {
 	if err := c.Validate(); err != nil {
 		return err
@@ -101,10 +101,14 @@ func (s *service) Update(ctx context.Context, c *Content) error {
 	if err != nil {
 		return err
 	}
+	c.AuthorID = existing.AuthorID
+	c.PublishedAt = existing.PublishedAt
 	c.CreatedAt = existing.CreatedAt
-	if err := s.store.Update(ctx, toStore(c)); err != nil {
+	row := toStore(c)
+	if err := s.store.Update(ctx, row); err != nil {
 		return err
 	}
+	c.UpdatedAt = row.UpdatedAt
 	s.emit(ctx, c, "content.updated", nil)
 	return nil
 }

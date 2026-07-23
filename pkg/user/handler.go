@@ -162,6 +162,10 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden: users:write scope required to set a password", http.StatusForbidden)
 		return
 	}
+	if err := validatePassword(input.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	// The tenant is authoritative from the request identity; a body-supplied
 	// tenant_id is ignored so a caller cannot create users in another tenant.
 	u := input.user(tenant, "")
@@ -200,6 +204,10 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 	}
 	if input.Password != "" && !canSetPassword(r) {
 		http.Error(w, "forbidden: users:write scope required to set a password", http.StatusForbidden)
+		return
+	}
+	if err := validatePassword(input.Password); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	u := input.user(tenant, id)

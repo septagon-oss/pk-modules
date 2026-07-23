@@ -40,7 +40,7 @@ func registerAdmin(registrar portslib.AdminRegistrar) error {
 			{Key: "display_name", Label: "Display name", Required: true, Placeholder: "Ada Lovelace"},
 			{Key: "email", Label: "Email", Kind: portslib.AdminFieldEmail, Required: true, Placeholder: "ada@example.com"},
 			{Key: "username", Label: "Username", Required: true, Placeholder: "ada"},
-			{Key: "password", Label: "Password", Kind: portslib.AdminFieldPassword, RequiredOnCreate: true, Help: "Required for a new user. Leave blank while editing to keep the current password.", Min: 12},
+			{Key: "password", Label: "Password", Kind: portslib.AdminFieldPassword, RequiredOnCreate: true, Help: "Required for a new user. Leave blank while editing to keep the current password.", Min: 12, Max: MaxPasswordBytes},
 			{Key: "active", Label: "Active", Kind: portslib.AdminFieldBoolean, DefaultValue: "true", Help: "Inactive users cannot create new sessions."},
 		},
 	}); err != nil {

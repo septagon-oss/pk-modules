@@ -394,6 +394,44 @@ func TestHandlerRejectsPasswordWriteWithoutCapability(t *testing.T) {
 	}
 }
 
+func TestHandlerRejectsTooLongPasswordBeforeUpdatingProfile(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	existing := &user.User{
+		TenantID: "t-1", Email: "atomic@example.test", Username: "atomic",
+		DisplayName: "Before", Active: true,
+	}
+	if err := m.Service().Create(ctx, existing); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	body := `{
+		"email":"atomic@example.test",
+		"username":"atomic",
+		"display_name":"After",
+		"password":"` + strings.Repeat("x", user.MaxPasswordBytes+1) + `",
+		"active":true
+	}`
+	req := httptest.NewRequest(http.MethodPut, user.APIPath+"/"+existing.ID, strings.NewReader(body))
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(), identity.Principal{
+		Subject: "operator", TenantID: "t-1", Scopes: []string{"admin"},
+	}))
+	rec := httptest.NewRecorder()
+
+	m.HTTPHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("update status = %d, want 400; body = %s", rec.Code, rec.Body.String())
+	}
+	got, err := m.Service().Get(ctx, "t-1", existing.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DisplayName != "Before" {
+		t.Fatalf("DisplayName = %q after rejected password, want Before", got.DisplayName)
+	}
+}
+
 func TestVerifyPasswordWithoutSetReturnsMismatch(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)

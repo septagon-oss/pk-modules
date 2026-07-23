@@ -111,7 +111,8 @@ func (s *Store) Append(ctx context.Context, e *store.Event) error {
 
 // Query returns matching events ordered by emitted_at ASC (oldest first) so
 // callers see chronological history. Limit is capped at 1000 by default to
-// avoid runaway scans; passing 0 uses the default.
+// avoid runaway scans; passing 0 uses the default. Negative offsets are
+// normalized to zero.
 func (s *Store) Query(ctx context.Context, f store.QueryFilter) ([]*store.Event, error) {
 	const defaultLimit = 100
 	const maxLimit = 1000
@@ -122,6 +123,10 @@ func (s *Store) Query(ctx context.Context, f store.QueryFilter) ([]*store.Event,
 	}
 	if limit > maxLimit {
 		limit = maxLimit
+	}
+	offset := f.Offset
+	if offset < 0 {
+		offset = 0
 	}
 
 	// Tenant scoping is mandatory on reads: an unscoped query must never return
@@ -156,11 +161,11 @@ func (s *Store) Query(ctx context.Context, f store.QueryFilter) ([]*store.Event,
 	if len(clauses) > 0 {
 		where = " WHERE " + strings.Join(clauses, " AND ")
 	}
-	args = append(args, limit)
+	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, tenant_id, actor, action, resource, severity, details, emitted_at
-		 FROM audit_events`+where+` ORDER BY emitted_at ASC LIMIT ?`, args...)
+		 FROM audit_events`+where+` ORDER BY emitted_at ASC LIMIT ? OFFSET ?`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("audit/sqlite: query: %w", err)
 	}

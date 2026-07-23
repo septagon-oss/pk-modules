@@ -67,6 +67,7 @@ func (s *service) Query(ctx context.Context, filter QueryFilter) ([]*Event, erro
 		Since:    filter.Since,
 		Until:    filter.Until,
 		Limit:    filter.Limit,
+		Offset:   filter.Offset,
 	})
 	if err != nil {
 		return nil, err

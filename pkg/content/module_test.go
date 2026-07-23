@@ -183,8 +183,15 @@ func TestUpdatePreservesCreatedAt(t *testing.T) {
 
 	in.Title = "Updated policy"
 	in.Body = "v2"
+	in.AuthorID = "" // Admin edit payloads intentionally omit server-owned fields.
 	if err := m.Service().Update(ctx, in); err != nil {
 		t.Fatalf("Update: %v", err)
+	}
+	if in.AuthorID != "u" {
+		t.Fatalf("updated value AuthorID = %q, want preserved author", in.AuthorID)
+	}
+	if !in.UpdatedAt.After(createdAt) {
+		t.Fatalf("updated value UpdatedAt %v should be after CreatedAt %v", in.UpdatedAt, createdAt)
 	}
 	got, err := m.Service().Get(ctx, "t-1", in.ID)
 	if err != nil {
@@ -198,6 +205,9 @@ func TestUpdatePreservesCreatedAt(t *testing.T) {
 	}
 	if got.Title != "Updated policy" {
 		t.Fatalf("Title = %q, want Updated policy", got.Title)
+	}
+	if got.AuthorID != "u" {
+		t.Fatalf("stored AuthorID = %q, want preserved author", got.AuthorID)
 	}
 }
 

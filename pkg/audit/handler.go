@@ -76,7 +76,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		Actor:    q.Get("actor"),
 		Action:   q.Get("action"),
 	}
-	// Malformed since/until/limit previously fell through silently, which
+	// Malformed since/until/limit/offset previously fell through silently, which
 	// hid pagination/time-window bugs in callers. Surface them as 400 so
 	// integration tests and humans see the mistake immediately.
 	if v := q.Get("since"); v != "" {
@@ -106,6 +106,14 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		filter.Limit = n
+	}
+	if v := q.Get("offset"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			http.Error(w, "invalid offset: must be a non-negative integer", http.StatusBadRequest)
+			return
+		}
+		filter.Offset = n
 	}
 	events, err := h.reader.Query(r.Context(), filter)
 	if err != nil {
