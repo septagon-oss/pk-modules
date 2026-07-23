@@ -34,6 +34,11 @@ var (
 	ErrKeyExpired = errors.New("apikey: key expired")
 )
 
+var reservedScopes = map[string]struct{}{
+	"admin":          {},
+	"console:access": {},
+}
+
 // service is the default APIKeyService implementation.
 type service struct {
 	store  store.Store
@@ -71,6 +76,10 @@ func (s *service) Issue(
 	if name == "" {
 		return "", nil, errors.New("apikey: name is required")
 	}
+	scopesCopy, err := normalizeScopes(scopes)
+	if err != nil {
+		return "", nil, err
+	}
 	secret, err := generateSecret()
 	if err != nil {
 		return "", nil, fmt.Errorf("apikey: generate secret: %w", err)
@@ -87,7 +96,6 @@ func (s *service) Issue(
 		return "", nil, fmt.Errorf("apikey: generate id: %w", err)
 	}
 
-	scopesCopy := append([]string(nil), scopes...)
 	encodedScopes, err := json.Marshal(scopesCopy)
 	if err != nil {
 		return "", nil, fmt.Errorf("apikey: encode scopes: %w", err)
@@ -127,6 +135,32 @@ func (s *service) Issue(
 		})
 	}
 	return plaintext, out, nil
+}
+
+func normalizeScopes(scopes []string) ([]string, error) {
+	if len(scopes) > 50 {
+		return nil, errors.New("apikey: at most 50 scopes are allowed")
+	}
+	out := make([]string, 0, len(scopes))
+	seen := make(map[string]bool, len(scopes))
+	for _, scope := range scopes {
+		scope = strings.TrimSpace(scope)
+		if scope == "" {
+			return nil, errors.New("apikey: scopes cannot contain an empty value")
+		}
+		if len(scope) > 100 {
+			return nil, errors.New("apikey: each scope must be at most 100 characters")
+		}
+		if _, reserved := reservedScopes[scope]; reserved {
+			return nil, fmt.Errorf("apikey: scope %q is reserved for interactive authorization", scope)
+		}
+		if seen[scope] {
+			continue
+		}
+		seen[scope] = true
+		out = append(out, scope)
+	}
+	return out, nil
 }
 
 // Verify validates a plaintext API key by locating candidate rows that

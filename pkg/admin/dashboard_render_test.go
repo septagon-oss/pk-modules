@@ -19,7 +19,13 @@ import (
 func TestDashboardRendersTokenDrivenUI(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
-	if err := m.Registrar().RegisterEntityCRUD("api_key_management", "APIKey", "/api/v1/api-keys"); err != nil {
+	resource := testResource()
+	resource.ModuleID = "api_key_management"
+	resource.EntityName = "APIKey"
+	resource.SingularLabel = "API key"
+	resource.PluralLabel = "API keys"
+	resource.APIPath = "/api/v1/api-keys"
+	if err := m.Registrar().RegisterResource(resource); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Registrar().RegisterPage(portslib.AdminPage{
@@ -37,12 +43,11 @@ func TestDashboardRendersTokenDrivenUI(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`class="pk-stat"`,        // stat tiles present
-		`pk-stat-num">1`,         // one module registered a surface
-		`pk-stat-label">Modules`, //
-		`class="pk-card-head"`,   // module card
-		"API Keys",               // humanized module name (from api_key_management)
-		"Operational",            // status pill
+		`class="pk-stat"`,
+		`<dd>1</dd>`,
+		`class="pk-module-row"`,
+		"API keys",
+		"Operational",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard body missing %q", want)
@@ -58,11 +63,11 @@ func TestDashboardRendersTokenDrivenUI(t *testing.T) {
 	sheet := css.Body.String()
 	for _, want := range []string{
 		":root {",
-		"--pk-color-text-primary: #111827",
+		"--pk-color-text-primary: #15221f",
 		"--pk-space-4: 16px",
-		"--pk-radius-md: 10px",
-		".pk-stat",  // atomic rules follow the tokens
-		".pk-card ", // organism
+		"--pk-radius-md: 8px",
+		".pk-stat",
+		".pk-module-row",
 	} {
 		if !strings.Contains(sheet, want) {
 			t.Errorf("served CSS missing %q (token-driven layer or atomic rules absent)", want)

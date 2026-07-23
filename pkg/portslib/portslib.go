@@ -54,10 +54,90 @@ type SidebarItem struct {
 	Label string
 }
 
-// AdminRegistrar lets modules register entity-CRUD pages and custom admin
+// AdminFieldKind controls how an admin field is rendered and serialized.
+// Values intentionally map to platform-neutral form concepts rather than a
+// specific frontend library.
+type AdminFieldKind string
+
+const (
+	AdminFieldText     AdminFieldKind = "text"
+	AdminFieldEmail    AdminFieldKind = "email"
+	AdminFieldPassword AdminFieldKind = "password"
+	AdminFieldSlug     AdminFieldKind = "slug"
+	AdminFieldTextarea AdminFieldKind = "textarea"
+	AdminFieldSelect   AdminFieldKind = "select"
+	AdminFieldBoolean  AdminFieldKind = "boolean"
+	AdminFieldNumber   AdminFieldKind = "number"
+	AdminFieldTags     AdminFieldKind = "tags"
+	AdminFieldDateTime AdminFieldKind = "datetime"
+	AdminFieldStatus   AdminFieldKind = "status"
+	AdminFieldCount    AdminFieldKind = "count"
+)
+
+// AdminOption is one allowed value for a select field.
+type AdminOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+// AdminField describes one editable resource field.
+type AdminField struct {
+	Key              string         `json:"key"`
+	Label            string         `json:"label"`
+	Kind             AdminFieldKind `json:"kind"`
+	Required         bool           `json:"required,omitempty"`
+	RequiredOnCreate bool           `json:"required_on_create,omitempty"`
+	ReadOnly         bool           `json:"read_only,omitempty"`
+	DefaultValue     string         `json:"default_value,omitempty"`
+	Placeholder      string         `json:"placeholder,omitempty"`
+	Help             string         `json:"help,omitempty"`
+	Min              int            `json:"min,omitempty"`
+	Max              int            `json:"max,omitempty"`
+	Options          []AdminOption  `json:"options,omitempty"`
+}
+
+// AdminColumn describes one human-readable table column.
+type AdminColumn struct {
+	Key     string         `json:"key"`
+	Label   string         `json:"label"`
+	Kind    AdminFieldKind `json:"kind,omitempty"`
+	Primary bool           `json:"primary,omitempty"`
+}
+
+// AdminAction describes a resource-row lifecycle action. PathSuffix is
+// appended to "<api path>/<escaped id>" and Method defaults to POST.
+type AdminAction struct {
+	Label      string `json:"label"`
+	Method     string `json:"method,omitempty"`
+	PathSuffix string `json:"path_suffix"`
+	Variant    string `json:"variant,omitempty"`
+	Confirm    string `json:"confirm,omitempty"`
+}
+
+// AdminResource is the complete, framework-neutral description of a managed
+// API resource. The reference admin uses it to render useful columns and
+// typed forms instead of exposing raw JSON editors.
+type AdminResource struct {
+	ModuleID      string        `json:"module_id"`
+	EntityName    string        `json:"entity_name"`
+	SingularLabel string        `json:"singular_label"`
+	PluralLabel   string        `json:"plural_label"`
+	Description   string        `json:"description,omitempty"`
+	APIPath       string        `json:"api_path"`
+	IDKey         string        `json:"id_key,omitempty"`
+	Columns       []AdminColumn `json:"columns"`
+	Fields        []AdminField  `json:"fields,omitempty"`
+	CanCreate     bool          `json:"can_create,omitempty"`
+	CanEdit       bool          `json:"can_edit,omitempty"`
+	CanDelete     bool          `json:"can_delete,omitempty"`
+	Actions       []AdminAction `json:"actions,omitempty"`
+	SuccessField  string        `json:"success_field,omitempty"`
+}
+
+// AdminRegistrar lets modules register schema-aware resources and custom
 // pages with the host application's admin shell.
 type AdminRegistrar interface {
-	RegisterEntityCRUD(moduleID, entityName, apiPath string) error
+	RegisterResource(resource AdminResource) error
 	RegisterPage(p AdminPage) error
 	RegisterSidebarSection(s SidebarSection) error
 }

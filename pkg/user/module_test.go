@@ -17,9 +17,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
 
 	"github.com/septagon-oss/pk-modules/pkg/tenant"
@@ -323,6 +325,72 @@ func TestSetAndVerifyPassword(t *testing.T) {
 	err := m.Service().VerifyPassword(ctx, "t-1", u.ID, "wrong")
 	if !errors.Is(err, passhash.ErrMismatch) {
 		t.Fatalf("VerifyPassword wrong err = %v, want ErrMismatch", err)
+	}
+}
+
+func TestHandlerCreatesLoginReadyUserForAuthorizedAdmin(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		user.APIPath,
+		strings.NewReader(`{
+			"email":"new-admin@example.test",
+			"username":"new-admin",
+			"display_name":"New Admin",
+			"password":"correct-horse-battery",
+			"active":true
+		}`),
+	)
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(), identity.Principal{
+		Subject:  "operator",
+		TenantID: "t-1",
+		Scopes:   []string{"admin"},
+	}))
+	rec := httptest.NewRecorder()
+
+	m.HTTPHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	created, err := m.Service().GetByUsername(context.Background(), "t-1", "new-admin")
+	if err != nil {
+		t.Fatalf("GetByUsername: %v", err)
+	}
+	if err := m.Service().VerifyPassword(
+		context.Background(),
+		"t-1",
+		created.ID,
+		"correct-horse-battery",
+	); err != nil {
+		t.Fatalf("created user's password does not verify: %v", err)
+	}
+}
+
+func TestHandlerRejectsPasswordWriteWithoutCapability(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		user.APIPath,
+		strings.NewReader(`{
+			"email":"blocked@example.test",
+			"username":"blocked",
+			"password":"correct-horse-battery",
+			"active":true
+		}`),
+	)
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(), identity.Principal{
+		Subject:  "ordinary-user",
+		TenantID: "t-1",
+	}))
+	rec := httptest.NewRecorder()
+
+	m.HTTPHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("create status = %d, want 403; body = %s", rec.Code, rec.Body.String())
 	}
 }
 

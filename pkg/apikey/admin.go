@@ -1,87 +1,53 @@
-package apikey
-
 // Implements: REQ-APIKEY-001.
 // Per: ADR-0017.
 // Discipline: C-14.
-// admin.go owns the admin shell wiring for api_key_management: the
-// sidebar section, the entity-CRUD registration, and a small server-
-// rendered page stub that hosts the listing.
-//
-// ADR: ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+
+package apikey
 
 import (
 	"fmt"
-	"html"
-	"html/template"
-	"net/http"
 
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
 
-// adminModuleID is the catalog ID used when registering admin surfaces.
-const adminModuleID = "api_key_management"
+const (
+	adminModuleID = "api_key_management"
+	AdminPagePath = "/admin/api_key_management/APIKey"
+)
 
-// AdminPagePath is the canonical path under which the API keys admin page
-// is mounted by registerAdmin.
-const AdminPagePath = "/admin/api-keys"
-
-var dashboardTemplate = template.Must(template.New("apikey-admin").Parse(`
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>{{.Title}}</title></head>
-<body>
-<h1>{{.Title}}</h1>
-<p>{{.Description}}</p>
-<p>API keys: <code>{{.APIPath}}</code></p>
-</body>
-</html>
-`))
-
-type dashboardData struct {
-	Title       string
-	Description string
-	APIPath     string
-}
-
-func renderAdminDashboard() http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		err := dashboardTemplate.Execute(w, dashboardData{
-			Title:       "API keys",
-			Description: "Issue, list, and revoke tenant-scoped API keys.",
-			APIPath:     html.EscapeString(APIPath),
-		})
-		if err != nil {
-			http.Error(w, fmt.Sprintf("render: %v", err), http.StatusInternalServerError)
-		}
-	}
-}
-
-func registerAdmin(r portslib.AdminRegistrar) error {
-	if r == nil {
+func registerAdmin(registrar portslib.AdminRegistrar) error {
+	if registrar == nil {
 		return nil
 	}
-	if err := r.RegisterEntityCRUD(adminModuleID, EntityName, APIPath); err != nil {
-		return fmt.Errorf("apikey: admin entity CRUD: %w", err)
-	}
-	if err := r.RegisterPage(portslib.AdminPage{
-		ModuleID: adminModuleID,
-		Path:     AdminPagePath,
-		Title:    "API keys",
-		Render:   renderAdminDashboard(),
-	}); err != nil {
-		return fmt.Errorf("apikey: admin page: %w", err)
-	}
-	if err := r.RegisterSidebarSection(portslib.SidebarSection{
-		ModuleID: adminModuleID,
-		Label:    "API keys",
-		Order:    30,
-		Items: []portslib.SidebarItem{
-			{Path: AdminPagePath, Label: "All keys"},
+	if err := registrar.RegisterResource(portslib.AdminResource{
+		ModuleID:      adminModuleID,
+		EntityName:    EntityName,
+		SingularLabel: "API key",
+		PluralLabel:   "API keys",
+		Description:   "Issue narrowly scoped credentials for automation and integrations.",
+		APIPath:       APIPath,
+		CanCreate:     true,
+		CanDelete:     true,
+		SuccessField:  "plaintext",
+		Columns: []portslib.AdminColumn{
+			{Key: "name", Label: "Name", Primary: true},
+			{Key: "prefix", Label: "Prefix"},
+			{Key: "scopes", Label: "Scopes", Kind: portslib.AdminFieldTags},
+			{Key: "last_used_at", Label: "Last used", Kind: portslib.AdminFieldDateTime},
+			{Key: "expires_at", Label: "Expires", Kind: portslib.AdminFieldDateTime},
+		},
+		Fields: []portslib.AdminField{
+			{Key: "name", Label: "Name", Required: true, Placeholder: "Production sync", Help: "A recognizable name for future revocation."},
+			{Key: "scopes", Label: "Scopes", Kind: portslib.AdminFieldTags, Required: true, Placeholder: "polls:read, polls:write", Help: "Comma-separated capabilities. Console and admin scopes are reserved."},
+			{Key: "ttl_seconds", Label: "Lifetime in seconds", Kind: portslib.AdminFieldNumber, Min: 60, Placeholder: "2592000", Help: "Leave empty for no automatic expiry."},
 		},
 	}); err != nil {
-		return fmt.Errorf("apikey: admin sidebar: %w", err)
+		return fmt.Errorf("apikey: admin resource: %w", err)
 	}
-	return nil
+	return registrar.RegisterSidebarSection(portslib.SidebarSection{
+		ModuleID: adminModuleID,
+		Label:    "Access",
+		Order:    30,
+		Items:    []portslib.SidebarItem{{Path: AdminPagePath, Label: "API keys"}},
+	})
 }

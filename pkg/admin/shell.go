@@ -1,32 +1,18 @@
-package admin
-
 // Implements: REQ-ADMIN-001.
 // Per: ADR-0032.
 // Discipline: C-14.
-// shell.go owns the in-memory AdminRegistrar implementation and the HTTP
-// renderer for the admin shell. The Shell stores entity-CRUD descriptors,
-// custom pages, and sidebar sections registered by sibling modules at boot
-// time, then serves them through a small template-driven set of routes.
-//
-// Routes:
-//
-//	GET <basePath>                              → home dashboard
-//	GET <basePath>/static/<file>                → embedded static asset
-//	GET <basePath>/<moduleID>/<entity>          → entity list (calls APIPath via fetch)
-//	GET <basePath>/<moduleID>/<entity>/new      → create form
-//	GET <basePath>/<moduleID>/<entity>/<id>     → detail/edit form
-//	GET <page.Path>                             → custom page (absolute path)
-//
-// Custom pages register with an absolute Path (eg "/admin/tenants"); the Shell
-// matches them by full URL path so they coexist with the generated entity
-// routes.
-//
-// ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+
+package admin
+
+// shell.go owns the schema-aware reference admin. Modules register typed
+// resources and the shell turns those descriptors into accessible lists,
+// forms, navigation, and responsive operator pages without a frontend build.
 
 import (
 	"bytes"
 	"embed"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -35,6 +21,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/septagon-oss/pk-core/pkg/security/identity"
 
 	adminstatic "github.com/septagon-oss/pk-modules/pkg/admin/static"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
@@ -49,35 +37,20 @@ type ShellOptions struct {
 	BasePath string
 }
 
-// EntityCRUD is the descriptor stored when a module calls RegisterEntityCRUD.
-type EntityCRUD struct {
-	ModuleID   string
-	EntityName string
-	APIPath    string
-}
-
 // Shell is the in-memory AdminRegistrar implementation. It stores registered
-// pages and renders them. Exported so Pro can introspect or extend behavior
-// while still satisfying portslib.AdminRegistrar.
+// resources and pages, then renders a single coherent management surface.
 type Shell struct {
 	title    string
 	basePath string
 
-	mu       sync.RWMutex
-	entities []EntityCRUD
-	pages    []portslib.AdminPage
-	sidebar  []portslib.SidebarSection
+	mu        sync.RWMutex
+	resources []portslib.AdminResource
+	pages     []portslib.AdminPage
+	sidebar   []portslib.SidebarSection
 
-	// templates is keyed by page name (home, entity_list, entity_form). Each
-	// entry is its own *template.Template so the {{define "content"}} block
-	// in each page file does not collide with sibling pages — a single
-	// ParseFS over all files would let the last-parsed "content" win, which
-	// produced cross-page render failures.
 	templates map[string]*template.Template
 	static    http.Handler
-	// css is the served stylesheet: the pk-design token :root block generated
-	// by tokens.CSSVars, followed by the embedded atomic rules. Composed once.
-	css []byte
+	css       []byte
 }
 
 // NewShell constructs a Shell with the given options. Empty Title and
@@ -93,19 +66,13 @@ func NewShell(opts ShellOptions) *Shell {
 	}
 	basePath = "/" + strings.Trim(basePath, "/")
 
-	s := &Shell{
-		title:    title,
-		basePath: basePath,
-	}
+	s := &Shell{title: title, basePath: basePath}
 	s.templates = parsePageTemplates()
 	s.static = http.StripPrefix(basePath+"/static/", http.FileServer(http.FS(adminstatic.FS())))
 	s.css = composeCSS()
 	return s
 }
 
-// composeCSS builds the served stylesheet: the pk-design token :root block
-// (generated from adminTokenSet) followed by the embedded atomic rules, which
-// reference those custom properties.
 func composeCSS() []byte {
 	rules, err := fs.ReadFile(adminstatic.FS(), "_admin.css")
 	if err != nil {
@@ -118,21 +85,18 @@ func composeCSS() []byte {
 	return out
 }
 
-// parsePageTemplates parses each page template (home, entity_list,
-// entity_form) into its own *template.Template, together with the shared
-// layout and sidebar partials. Keeping pages in separate sets avoids the
-// "last define wins" trap when multiple files declare {{define "content"}}.
 func parsePageTemplates() map[string]*template.Template {
 	pages := []string{"home", "entity_list", "entity_form"}
 	out := make(map[string]*template.Template, len(pages))
-	for _, p := range pages {
-		t := template.Must(template.ParseFS(
+	for _, page := range pages {
+		out[page] = template.Must(template.New("admin").Funcs(template.FuncMap{
+			"inc": func(value int) int { return value + 1 },
+		}).ParseFS(
 			templatesFS,
 			"templates/layout.tmpl",
 			"templates/sidebar.tmpl",
-			"templates/"+p+".tmpl",
+			"templates/"+page+".tmpl",
 		))
-		out[p] = t
 	}
 	return out
 }
@@ -143,78 +107,148 @@ func (s *Shell) Title() string { return s.title }
 // BasePath returns the configured base path.
 func (s *Shell) BasePath() string { return s.basePath }
 
-// RegisterEntityCRUD adds a CRUD page for the given entity. Duplicate
-// (moduleID, entityName) pairs return an error.
-func (s *Shell) RegisterEntityCRUD(moduleID, entityName, apiPath string) error {
-	moduleID = strings.TrimSpace(moduleID)
-	entityName = strings.TrimSpace(entityName)
-	apiPath = strings.TrimSpace(apiPath)
-	if moduleID == "" || entityName == "" || apiPath == "" {
-		return errors.New("admin: RegisterEntityCRUD: moduleID, entityName, apiPath required")
+// RegisterResource adds a typed management surface. Duplicate identifiers or
+// incomplete descriptors fail during application construction.
+func (s *Shell) RegisterResource(resource portslib.AdminResource) error {
+	if err := normalizeResource(&resource); err != nil {
+		return err
 	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, e := range s.entities {
-		if e.ModuleID == moduleID && e.EntityName == entityName {
-			return fmt.Errorf("admin: entity %s/%s already registered", moduleID, entityName)
+	for _, existing := range s.resources {
+		if existing.ModuleID == resource.ModuleID && existing.EntityName == resource.EntityName {
+			return fmt.Errorf("admin: resource %s/%s already registered", resource.ModuleID, resource.EntityName)
 		}
 	}
-	s.entities = append(s.entities, EntityCRUD{
-		ModuleID:   moduleID,
-		EntityName: entityName,
-		APIPath:    apiPath,
-	})
+	s.resources = append(s.resources, resource)
 	return nil
 }
 
-// RegisterPage adds a custom page rendered by the supplied handler. Duplicate
-// (moduleID, path) pairs return an error.
-func (s *Shell) RegisterPage(p portslib.AdminPage) error {
-	if strings.TrimSpace(p.ModuleID) == "" {
+func normalizeResource(resource *portslib.AdminResource) error {
+	if resource == nil {
+		return errors.New("admin: RegisterResource: resource is required")
+	}
+	resource.ModuleID = strings.TrimSpace(resource.ModuleID)
+	resource.EntityName = strings.TrimSpace(resource.EntityName)
+	resource.SingularLabel = strings.TrimSpace(resource.SingularLabel)
+	resource.PluralLabel = strings.TrimSpace(resource.PluralLabel)
+	resource.Description = strings.TrimSpace(resource.Description)
+	resource.APIPath = strings.TrimSpace(resource.APIPath)
+	resource.IDKey = strings.TrimSpace(resource.IDKey)
+	if resource.ModuleID == "" || resource.EntityName == "" || resource.APIPath == "" {
+		return errors.New("admin: RegisterResource: moduleID, entityName, and APIPath are required")
+	}
+	if resource.SingularLabel == "" {
+		resource.SingularLabel = humanizeIdentifier(resource.EntityName)
+	}
+	if resource.PluralLabel == "" {
+		resource.PluralLabel = resource.SingularLabel + "s"
+	}
+	if resource.IDKey == "" {
+		resource.IDKey = "id"
+	}
+	if len(resource.Columns) == 0 {
+		return errors.New("admin: RegisterResource: at least one human-readable column is required")
+	}
+
+	columns := make(map[string]bool, len(resource.Columns))
+	for i := range resource.Columns {
+		column := &resource.Columns[i]
+		column.Key = strings.TrimSpace(column.Key)
+		column.Label = strings.TrimSpace(column.Label)
+		if column.Key == "" || column.Label == "" {
+			return errors.New("admin: RegisterResource: every column requires a key and label")
+		}
+		if columns[column.Key] {
+			return fmt.Errorf("admin: RegisterResource: duplicate column %q", column.Key)
+		}
+		columns[column.Key] = true
+	}
+
+	fields := make(map[string]bool, len(resource.Fields))
+	for i := range resource.Fields {
+		field := &resource.Fields[i]
+		field.Key = strings.TrimSpace(field.Key)
+		field.Label = strings.TrimSpace(field.Label)
+		if field.Key == "" || field.Label == "" {
+			return errors.New("admin: RegisterResource: every field requires a key and label")
+		}
+		if fields[field.Key] {
+			return fmt.Errorf("admin: RegisterResource: duplicate field %q", field.Key)
+		}
+		fields[field.Key] = true
+		if field.Kind == "" {
+			field.Kind = portslib.AdminFieldText
+		}
+	}
+	for i := range resource.Actions {
+		action := &resource.Actions[i]
+		action.Label = strings.TrimSpace(action.Label)
+		action.Method = strings.ToUpper(strings.TrimSpace(action.Method))
+		action.PathSuffix = "/" + strings.Trim(action.PathSuffix, "/")
+		if action.Label == "" || action.PathSuffix == "/" {
+			return errors.New("admin: RegisterResource: every action requires a label and path suffix")
+		}
+		if action.Method == "" {
+			action.Method = http.MethodPost
+		}
+		switch action.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		default:
+			return fmt.Errorf("admin: RegisterResource: unsupported action method %q", action.Method)
+		}
+	}
+	return nil
+}
+
+// RegisterPage adds a custom page rendered by the supplied handler.
+func (s *Shell) RegisterPage(page portslib.AdminPage) error {
+	if strings.TrimSpace(page.ModuleID) == "" {
 		return errors.New("admin: RegisterPage: ModuleID required")
 	}
-	if strings.TrimSpace(p.Path) == "" {
+	if strings.TrimSpace(page.Path) == "" {
 		return errors.New("admin: RegisterPage: Path required")
 	}
-	if p.Render == nil {
+	if page.Render == nil {
 		return errors.New("admin: RegisterPage: Render handler required")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, existing := range s.pages {
-		if existing.ModuleID == p.ModuleID && existing.Path == p.Path {
-			return fmt.Errorf("admin: page %s already registered for module %s", p.Path, p.ModuleID)
+		if existing.ModuleID == page.ModuleID && existing.Path == page.Path {
+			return fmt.Errorf("admin: page %s already registered for module %s", page.Path, page.ModuleID)
 		}
 	}
-	s.pages = append(s.pages, p)
+	s.pages = append(s.pages, page)
 	return nil
 }
 
 // RegisterSidebarSection adds a left-nav section.
-func (s *Shell) RegisterSidebarSection(sec portslib.SidebarSection) error {
-	if strings.TrimSpace(sec.ModuleID) == "" {
+func (s *Shell) RegisterSidebarSection(section portslib.SidebarSection) error {
+	if strings.TrimSpace(section.ModuleID) == "" {
 		return errors.New("admin: RegisterSidebarSection: ModuleID required")
 	}
-	if strings.TrimSpace(sec.Label) == "" {
+	if strings.TrimSpace(section.Label) == "" {
 		return errors.New("admin: RegisterSidebarSection: Label required")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, existing := range s.sidebar {
-		if existing.ModuleID == sec.ModuleID && existing.Label == sec.Label {
-			return fmt.Errorf("admin: sidebar section %q already registered for module %s", sec.Label, sec.ModuleID)
+		if existing.ModuleID == section.ModuleID && existing.Label == section.Label {
+			return fmt.Errorf("admin: sidebar section %q already registered for module %s", section.Label, section.ModuleID)
 		}
 	}
-	s.sidebar = append(s.sidebar, sec)
+	s.sidebar = append(s.sidebar, section)
 	return nil
 }
 
-// Entities returns a snapshot of registered entity-CRUD descriptors.
-func (s *Shell) Entities() []EntityCRUD {
+// Resources returns a snapshot of registered resource descriptors.
+func (s *Shell) Resources() []portslib.AdminResource {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]EntityCRUD, len(s.entities))
-	copy(out, s.entities)
+	out := make([]portslib.AdminResource, len(s.resources))
+	copy(out, s.resources)
 	return out
 }
 
@@ -227,8 +261,7 @@ func (s *Shell) Pages() []portslib.AdminPage {
 	return out
 }
 
-// SidebarSections returns sidebar sections sorted by Order then Label. Stable
-// secondary order keeps test assertions deterministic.
+// SidebarSections returns sidebar sections sorted by Order then Label.
 func (s *Shell) SidebarSections() []portslib.SidebarSection {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -243,7 +276,7 @@ func (s *Shell) SidebarSections() []portslib.SidebarSection {
 	return out
 }
 
-// ServeHTTP routes admin requests. See package docs for the route table.
+// ServeHTTP routes admin requests.
 func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -251,12 +284,11 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	urlPath := r.URL.Path
 
-	// Static assets. The stylesheet is served from the composed CSS (pk-design
-	// token :root block + atomic rules); everything else from the embedded FS.
 	staticPrefix := s.basePath + "/static/"
 	if strings.HasPrefix(urlPath, staticPrefix) {
 		if urlPath == staticPrefix+"_admin.css" {
 			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=300")
 			_, _ = w.Write(s.css)
 			return
 		}
@@ -264,103 +296,110 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Custom pages take precedence on exact-path match so module-supplied
-	// routes like "/admin/tenants" resolve before the generic entity router.
 	if page, ok := s.findPage(urlPath); ok {
 		page.Render(w, r)
 		return
 	}
-
-	// Home.
 	if urlPath == s.basePath || urlPath == s.basePath+"/" {
 		s.renderHome(w, r)
 		return
 	}
 
-	// Entity routes: <basePath>/<moduleID>/<entityName>(/(new|<id>))?
 	if rest, ok := strings.CutPrefix(urlPath, s.basePath+"/"); ok {
 		parts := strings.Split(strings.Trim(rest, "/"), "/")
 		if len(parts) >= 2 {
-			moduleID, entityName := parts[0], parts[1]
-			entity, found := s.findEntity(moduleID, entityName)
+			resource, found := s.findResource(parts[0], parts[1])
 			if found {
 				switch len(parts) {
 				case 2:
-					s.renderEntityList(w, r, entity)
+					s.renderEntityList(w, r, resource)
 					return
 				case 3:
-					if parts[2] == "new" {
-						s.renderEntityForm(w, r, entity, "")
-					} else {
-						s.renderEntityForm(w, r, entity, parts[2])
+					switch {
+					case parts[2] == "new" && resource.CanCreate:
+						s.renderEntityForm(w, r, resource, "")
+						return
+					case parts[2] != "new" && resource.CanEdit:
+						s.renderEntityForm(w, r, resource, parts[2])
+						return
 					}
-					return
 				}
 			}
 		}
 	}
-
 	http.NotFound(w, r)
 }
 
 func (s *Shell) findPage(urlPath string) (portslib.AdminPage, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, p := range s.pages {
-		if p.Path == urlPath {
-			return p, true
+	for _, page := range s.pages {
+		if page.Path == urlPath {
+			return page, true
 		}
 	}
 	return portslib.AdminPage{}, false
 }
 
-func (s *Shell) findEntity(moduleID, entityName string) (EntityCRUD, bool) {
+func (s *Shell) findResource(moduleID, entityName string) (portslib.AdminResource, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, e := range s.entities {
-		if e.ModuleID == moduleID && e.EntityName == entityName {
-			return e, true
+	for _, resource := range s.resources {
+		if resource.ModuleID == moduleID && resource.EntityName == entityName {
+			return resource, true
 		}
 	}
-	return EntityCRUD{}, false
+	return portslib.AdminResource{}, false
 }
 
-// moduleSummary groups entities and pages for the home template.
+type shellView struct {
+	Title       string
+	PageTitle   string
+	BasePath    string
+	CurrentPath string
+	Subject     string
+	TenantID    string
+	Sidebar     []portslib.SidebarSection
+}
+
+func (s *Shell) view(r *http.Request, pageTitle string) shellView {
+	principal := identity.PrincipalFromContext(r.Context())
+	return shellView{
+		Title:       s.title,
+		PageTitle:   pageTitle,
+		BasePath:    s.basePath,
+		CurrentPath: r.URL.Path,
+		Subject:     principal.Subject,
+		TenantID:    principal.TenantID,
+		Sidebar:     s.SidebarSections(),
+	}
+}
+
 type moduleSummary struct {
 	ModuleID    string
 	DisplayName string
 	Description string
-	Entities    []EntityCRUD
+	Resources   []portslib.AdminResource
 	Pages       []portslib.AdminPage
 }
 
-// homeStats are the at-a-glance counts shown as tiles on the dashboard. They
-// are derived from the registered admin surfaces (no data-source access), so
-// they describe the composed app rather than live row counts.
 type homeStats struct {
-	Modules     int
+	Areas       int
 	Collections int
-	Endpoints   int
-	Pages       int
+	Actions     int
 }
 
 type homeData struct {
-	Title     string
-	PageTitle string
-	BasePath  string
-	Sidebar   []portslib.SidebarSection
-	Modules   []moduleSummary
-	Stats     homeStats
+	shellView
+	Modules []moduleSummary
+	Stats   homeStats
 }
 
-// moduleDisplayNames and moduleDescriptions humanize the built-in modules on
-// the dashboard. Unknown (contributed) modules fall back to a humanized ID and
-// no description.
 var moduleDisplayNames = map[string]string{
 	"tenant_management":       "Tenants",
 	"user_management":         "Users",
 	"auth_management":         "Authentication",
-	"api_key_management":      "API Keys",
+	"api_key_management":      "API keys",
 	"audit_management":        "Audit",
 	"content_management":      "Content",
 	"notification_management": "Notifications",
@@ -369,105 +408,124 @@ var moduleDisplayNames = map[string]string{
 }
 
 var moduleDescriptions = map[string]string{
-	"tenant_management":       "Tenants — the root every other module's data is scoped to.",
-	"user_management":         "Users, credentials, and profiles.",
-	"auth_management":         "Sessions: login, logout, and the login-lockout policy.",
-	"api_key_management":      "API keys — issue, verify, and revoke programmatic access.",
-	"audit_management":        "The append-only audit trail (read-only over HTTP).",
-	"content_management":      "Tenant-scoped content with slugs and publishing.",
-	"notification_management": "Per-user notifications and channel subscriptions.",
-	"admin_management":        "This admin console and its registered surfaces.",
-	"health_management":       "Aggregated per-module health at /healthz.",
+	"tenant_management":       "Organization identity, ownership, and tenancy boundaries.",
+	"user_management":         "People, access state, and profile records.",
+	"auth_management":         "Interactive sessions and sign-in policy.",
+	"api_key_management":      "Scoped credentials for automation and integrations.",
+	"audit_management":        "Append-only evidence of security and lifecycle events.",
+	"content_management":      "Tenant-owned pages, posts, and publishing state.",
+	"notification_management": "In-app messages and delivery preferences.",
+	"admin_management":        "The operator workspace and its registered surfaces.",
+	"health_management":       "Live dependency checks from the composed application.",
 }
 
-// humanizeModuleID turns "some_thing_management" into "Some Thing".
 func humanizeModuleID(id string) string {
-	if n, ok := moduleDisplayNames[id]; ok {
-		return n
+	if name, ok := moduleDisplayNames[id]; ok {
+		return name
 	}
-	s := strings.TrimSuffix(id, "_management")
-	words := strings.FieldsFunc(s, func(r rune) bool { return r == '_' || r == '-' })
-	for i, w := range words {
-		if w == "" {
-			continue
+	return humanizeIdentifier(strings.TrimSuffix(id, "_management"))
+}
+
+func humanizeIdentifier(value string) string {
+	words := strings.FieldsFunc(value, func(r rune) bool {
+		return r == '_' || r == '-' || r == '.'
+	})
+	for i, word := range words {
+		if word != "" {
+			words[i] = strings.ToUpper(word[:1]) + word[1:]
 		}
-		words[i] = strings.ToUpper(w[:1]) + w[1:]
 	}
 	if len(words) == 0 {
-		return id
+		return value
 	}
 	return strings.Join(words, " ")
 }
 
 type entityListData struct {
-	Title     string
-	PageTitle string
-	BasePath  string
-	Sidebar   []portslib.SidebarSection
-	Entity    EntityCRUD
+	shellView
+	Resource       portslib.AdminResource
+	ResourceConfig string
 }
 
 type entityFormData struct {
-	Title     string
-	PageTitle string
-	BasePath  string
-	Sidebar   []portslib.SidebarSection
-	Entity    EntityCRUD
-	EntityID  string
+	shellView
+	Resource       portslib.AdminResource
+	ResourceConfig string
+	EntityID       string
 }
 
-func (s *Shell) renderHome(w http.ResponseWriter, _ *http.Request) {
-	mods := s.modulesSummary()
-	stats := homeStats{Modules: len(mods)}
-	for _, m := range mods {
-		stats.Collections += len(m.Entities)
-		stats.Endpoints += len(m.Entities) // one canonical REST resource per entity
-		stats.Pages += len(m.Pages)
+func (s *Shell) renderHome(w http.ResponseWriter, r *http.Request) {
+	modules := s.modulesSummary()
+	stats := homeStats{Areas: len(modules)}
+	for _, module := range modules {
+		stats.Collections += len(module.Resources)
+		for _, resource := range module.Resources {
+			stats.Actions += boolInt(resource.CanCreate) + boolInt(resource.CanEdit) +
+				boolInt(resource.CanDelete) + len(resource.Actions)
+		}
 	}
-	data := homeData{
-		Title:     s.title,
-		PageTitle: "Dashboard",
-		BasePath:  s.basePath,
-		Sidebar:   s.SidebarSections(),
-		Modules:   mods,
+	s.render(w, "home", homeData{
+		shellView: s.view(r, "Overview"),
+		Modules:   modules,
 		Stats:     stats,
-	}
-	s.render(w, "home", data)
+	})
 }
 
-func (s *Shell) renderEntityList(w http.ResponseWriter, _ *http.Request, e EntityCRUD) {
-	data := entityListData{
-		Title:     s.title,
-		PageTitle: e.EntityName,
-		BasePath:  s.basePath,
-		Sidebar:   s.SidebarSections(),
-		Entity:    e,
+func boolInt(value bool) int {
+	if value {
+		return 1
 	}
-	s.render(w, "entity_list", data)
+	return 0
 }
 
-func (s *Shell) renderEntityForm(w http.ResponseWriter, _ *http.Request, e EntityCRUD, id string) {
-	title := "New " + e.EntityName
+func (s *Shell) renderEntityList(
+	w http.ResponseWriter,
+	r *http.Request,
+	resource portslib.AdminResource,
+) {
+	config, err := encodeResource(resource)
+	if err != nil {
+		http.Error(w, "admin render: invalid resource descriptor", http.StatusInternalServerError)
+		return
+	}
+	s.render(w, "entity_list", entityListData{
+		shellView:      s.view(r, resource.PluralLabel),
+		Resource:       resource,
+		ResourceConfig: config,
+	})
+}
+
+func (s *Shell) renderEntityForm(
+	w http.ResponseWriter,
+	r *http.Request,
+	resource portslib.AdminResource,
+	id string,
+) {
+	config, err := encodeResource(resource)
+	if err != nil {
+		http.Error(w, "admin render: invalid resource descriptor", http.StatusInternalServerError)
+		return
+	}
+	title := "New " + resource.SingularLabel
 	if id != "" {
-		title = e.EntityName + " " + id
+		title = "Edit " + resource.SingularLabel
 	}
-	data := entityFormData{
-		Title:     s.title,
-		PageTitle: title,
-		BasePath:  s.basePath,
-		Sidebar:   s.SidebarSections(),
-		Entity:    e,
-		EntityID:  id,
-	}
-	s.render(w, "entity_form", data)
+	s.render(w, "entity_form", entityFormData{
+		shellView:      s.view(r, title),
+		Resource:       resource,
+		ResourceConfig: config,
+		EntityID:       id,
+	})
 }
 
-// render executes the named template into a buffer first so that template
-// errors never produce a partial write. ResponseWriter is touched only after
-// rendering succeeds (commit path) or as a single error path on the failure
-// branch — avoiding the "superfluous response.WriteHeader call" warning that
-// the previous in-place ExecuteTemplate + http.Error sequence produced when
-// the template engine had already auto-committed a 200 before failing.
+func encodeResource(resource portslib.AdminResource) (string, error) {
+	payload, err := json.Marshal(resource)
+	if err != nil {
+		return "", err
+	}
+	return base64.RawStdEncoding.EncodeToString(payload), nil
+}
+
 func (s *Shell) render(w http.ResponseWriter, name string, data any) {
 	tmpl, ok := s.templates[name]
 	if !ok {
@@ -480,6 +538,7 @@ func (s *Shell) render(w http.ResponseWriter, name string, data any) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf.Bytes())
 }
@@ -493,24 +552,26 @@ func (s *Shell) modulesSummary() []moduleSummary {
 		if existing, ok := byID[id]; ok {
 			return existing
 		}
-		ms := &moduleSummary{ModuleID: id}
-		byID[id] = ms
+		summary := &moduleSummary{ModuleID: id}
+		byID[id] = summary
 		order = append(order, id)
-		return ms
+		return summary
 	}
-	for _, e := range s.entities {
-		add(e.ModuleID).Entities = append(add(e.ModuleID).Entities, e)
+	for _, resource := range s.resources {
+		summary := add(resource.ModuleID)
+		summary.Resources = append(summary.Resources, resource)
 	}
-	for _, p := range s.pages {
-		add(p.ModuleID).Pages = append(add(p.ModuleID).Pages, p)
+	for _, page := range s.pages {
+		summary := add(page.ModuleID)
+		summary.Pages = append(summary.Pages, page)
 	}
 	sort.Strings(order)
 	out := make([]moduleSummary, 0, len(order))
 	for _, id := range order {
-		ms := *byID[id]
-		ms.DisplayName = humanizeModuleID(id)
-		ms.Description = moduleDescriptions[id]
-		out = append(out, ms)
+		summary := *byID[id]
+		summary.DisplayName = humanizeModuleID(id)
+		summary.Description = moduleDescriptions[id]
+		out = append(out, summary)
 	}
 	return out
 }

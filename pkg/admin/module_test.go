@@ -27,6 +27,20 @@ func newModule(t *testing.T, opts ...admin.Option) *admin.Module {
 	return m
 }
 
+func testResource() portslib.AdminResource {
+	return portslib.AdminResource{
+		ModuleID:      "user_management",
+		EntityName:    "User",
+		SingularLabel: "user",
+		PluralLabel:   "Users",
+		APIPath:       "/api/v1/users",
+		CanCreate:     true,
+		CanEdit:       true,
+		Columns:       []portslib.AdminColumn{{Key: "email", Label: "Email", Primary: true}},
+		Fields:        []portslib.AdminField{{Key: "email", Label: "Email", Kind: portslib.AdminFieldEmail, Required: true}},
+	}
+}
+
 func TestNewModuleDefaults(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
@@ -49,10 +63,10 @@ func TestWithTitleAndBasePath(t *testing.T) {
 	}
 }
 
-func TestRegisterEntityCRUDStoresEntry(t *testing.T) {
+func TestRegisterResourceStoresEntry(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
-	if err := m.Registrar().RegisterEntityCRUD("user_management", "User", "/api/v1/users"); err != nil {
+	if err := m.Registrar().RegisterResource(testResource()); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 }
@@ -85,13 +99,13 @@ func TestRegisterSidebarSection(t *testing.T) {
 	}
 }
 
-func TestRegisterDuplicateEntityCRUDReturnsError(t *testing.T) {
+func TestRegisterDuplicateResourceReturnsError(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
-	if err := m.Registrar().RegisterEntityCRUD("user_management", "User", "/api/v1/users"); err != nil {
+	if err := m.Registrar().RegisterResource(testResource()); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if err := m.Registrar().RegisterEntityCRUD("user_management", "User", "/api/v1/users"); err == nil {
+	if err := m.Registrar().RegisterResource(testResource()); err == nil {
 		t.Fatal("expected error on duplicate")
 	}
 }
@@ -113,7 +127,7 @@ func TestHTTPHandlerServesHome(t *testing.T) {
 func TestHTTPHandlerServesEntityList(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
-	if err := m.Registrar().RegisterEntityCRUD("user_management", "User", "/api/v1/users"); err != nil {
+	if err := m.Registrar().RegisterResource(testResource()); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/admin/user_management/User", nil)
@@ -130,7 +144,7 @@ func TestHTTPHandlerServesEntityList(t *testing.T) {
 func TestHTTPHandlerServesEntityFormNew(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
-	if err := m.Registrar().RegisterEntityCRUD("user_management", "User", "/api/v1/users"); err != nil {
+	if err := m.Registrar().RegisterResource(testResource()); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/admin/user_management/User/new", nil)
@@ -138,6 +152,13 @@ func TestHTTPHandlerServesEntityFormNew(t *testing.T) {
 	m.HTTPHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="email"`) {
+		t.Fatalf("form missing schema field: %s", body)
+	}
+	if strings.Contains(body, "payload (JSON)") || strings.Contains(body, `name="payload"`) {
+		t.Fatal("form regressed to a raw JSON payload editor")
 	}
 }
 
@@ -152,6 +173,77 @@ func TestHTTPHandlerServesStaticCSS(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "css") {
 		t.Fatalf("Content-Type = %q", got)
+	}
+}
+
+func TestHTTPHandlerServesAdminJavaScript(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/static/_admin.js", nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "javascript") {
+		t.Fatalf("Content-Type = %q", got)
+	}
+	if !strings.Contains(rec.Body.String(), "pk-resource-form") {
+		t.Fatal("admin behavior asset is missing the typed form controller")
+	}
+}
+
+func TestRegisterResourceRejectsRawUnknownShape(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	resource := testResource()
+	resource.Columns = nil
+	if err := m.Registrar().RegisterResource(resource); err == nil {
+		t.Fatal("RegisterResource accepted a descriptor without readable columns")
+	}
+}
+
+func TestEntityListRendersDeclaredColumnsAndAccessibleControls(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	if err := m.Registrar().RegisterResource(testResource()); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/user_management/User", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		`scope="col">Email`,
+		`type="search"`,
+		`role="status"`,
+		`aria-label="Pagination"`,
+		`data-resource-config=`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("entity list missing %q", want)
+		}
+	}
+	if strings.Contains(body, "JSON.stringify(row)") {
+		t.Fatal("template exposes raw row JSON instead of declared columns")
+	}
+}
+
+func TestAdminCSSCarriesResponsiveAndAccessibilityGuards(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/static/_admin.css", nil))
+	body := rec.Body.String()
+	for _, want := range []string{
+		"@media (max-width: 960px)",
+		"min-height: 44px",
+		":focus-visible",
+		"prefers-reduced-motion",
+		"overflow-x: hidden",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("responsive stylesheet missing %q", want)
+		}
 	}
 }
 
@@ -263,7 +355,7 @@ func (c *countingResponseWriter) Write(p []byte) (int, error) {
 func TestRenderDoesNotDoubleWriteHeader(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
-	if err := m.Registrar().RegisterEntityCRUD("user_management", "User", "/api/v1/users"); err != nil {
+	if err := m.Registrar().RegisterResource(testResource()); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	cases := []struct {

@@ -1,41 +1,53 @@
 {{define "entity_list"}}{{template "layout" .}}{{end}}
 {{define "content"}}
-<h2>{{.Entity.EntityName}}</h2>
-<p class="pk-muted">Module <code class="pk-mono">{{.Entity.ModuleID}}</code> — API <code class="pk-mono">{{.Entity.APIPath}}</code></p>
-<p>
-  <a href="{{.BasePath}}/{{.Entity.ModuleID}}/{{.Entity.EntityName}}/new">+ New {{.Entity.EntityName}}</a>
-</p>
-<p class="pk-muted">
-  The list view fetches rows from <code class="pk-mono">{{.Entity.APIPath}}</code>
-  at render time. Pro replaces this server-rendered table with a live SPA.
-</p>
-<table class="pk-admin-table" id="pk-entity-list">
-  <thead><tr><th>id</th><th>summary</th></tr></thead>
-  <tbody><tr><td colspan="2" class="pk-muted">loading…</td></tr></tbody>
-</table>
-<script>
-(function(){
-  var url = {{.Entity.APIPath}};
-  fetch(url, {credentials: "same-origin"}).then(function(r){return r.json();}).then(function(rows){
-    var tbody = document.querySelector("#pk-entity-list tbody");
-    if (!Array.isArray(rows)) { rows = (rows && rows.items) || []; }
-    tbody.innerHTML = "";
-    rows.forEach(function(row){
-      var tr = document.createElement("tr");
-      var idCell = document.createElement("td");
-      idCell.textContent = row.id || row.ID || "";
-      var summaryCell = document.createElement("td");
-      summaryCell.textContent = JSON.stringify(row);
-      tr.appendChild(idCell); tr.appendChild(summaryCell);
-      tbody.appendChild(tr);
-    });
-    if (rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="2" class="pk-muted">no rows</td></tr>';
-    }
-  }).catch(function(err){
-    var tbody = document.querySelector("#pk-entity-list tbody");
-    tbody.innerHTML = '<tr><td colspan="2" class="pk-muted">error: '+ err +'</td></tr>';
-  });
-})();
-</script>
+<section class="pk-resource-page" data-pk-page="resource-list" data-resource-config="{{.ResourceConfig}}" data-list-path="{{.BasePath}}/{{.Resource.ModuleID}}/{{.Resource.EntityName}}">
+  <header class="pk-page-head">
+    <div>
+      <a class="pk-backlink" href="{{.BasePath}}">← Overview</a>
+      <p class="pk-eyebrow">{{.Resource.ModuleID}}</p>
+      <h1>{{.Resource.PluralLabel}}</h1>
+      {{if .Resource.Description}}<p class="pk-lede">{{.Resource.Description}}</p>{{end}}
+    </div>
+    {{if .Resource.CanCreate}}
+    <a class="pk-btn pk-btn-primary" href="{{.BasePath}}/{{.Resource.ModuleID}}/{{.Resource.EntityName}}/new">
+      New {{.Resource.SingularLabel}}
+    </a>
+    {{end}}
+  </header>
+
+  <div class="pk-toolbar" role="search">
+    <label class="pk-search">
+      <span class="pk-visually-hidden">Search {{.Resource.PluralLabel}}</span>
+      <span aria-hidden="true">⌕</span>
+      <input id="pk-resource-search" type="search" placeholder="Filter this page…" autocomplete="off">
+    </label>
+    <button class="pk-btn" id="pk-resource-refresh" type="button">Refresh</button>
+  </div>
+
+  <div class="pk-inline-status" id="pk-resource-status" role="status" aria-live="polite">Loading {{.Resource.PluralLabel}}…</div>
+  <div class="pk-table-shell" tabindex="0" aria-label="{{.Resource.PluralLabel}} table">
+    <table class="pk-admin-table" id="pk-resource-table">
+      <thead>
+        <tr>
+          {{range .Resource.Columns}}<th scope="col">{{.Label}}</th>{{end}}
+          {{if or .Resource.CanEdit .Resource.CanDelete .Resource.Actions}}<th scope="col"><span class="pk-visually-hidden">Actions</span></th>{{end}}
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="pk-empty-state pk-empty-state-compact" id="pk-resource-empty" hidden>
+    <span class="pk-empty-glyph" aria-hidden="true">∅</span>
+    <h2>No {{.Resource.PluralLabel}} found</h2>
+    <p id="pk-resource-empty-copy">There is nothing to show on this page yet.</p>
+  </div>
+
+  <footer class="pk-pagination" aria-label="Pagination">
+    <button class="pk-btn" id="pk-page-prev" type="button">← Previous</button>
+    <span id="pk-page-label">Page 1</span>
+    <button class="pk-btn" id="pk-page-next" type="button">Next →</button>
+  </footer>
+  <noscript><p class="pk-error">JavaScript is required for live resource management.</p></noscript>
+</section>
 {{end}}

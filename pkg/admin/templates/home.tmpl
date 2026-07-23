@@ -1,62 +1,56 @@
 {{define "home"}}{{template "layout" .}}{{end}}
 {{define "content"}}
-<div class="pk-page-head">
+<section class="pk-hero">
   <div>
-    <h2>Dashboard</h2>
-    <p class="pk-muted">Overview of the composed application and its admin surfaces.</p>
+    <p class="pk-eyebrow">Composed application</p>
+    <h1>Know what is running.<br><em>Operate what matters.</em></h1>
+    <p class="pk-lede">A focused view of the resources and actions exposed by this PlatformKit instance.</p>
   </div>
-  <span class="pk-pill pk-pill-ok">● Operational</span>
-</div>
+  <div class="pk-runtime-stamp" aria-label="Runtime status operational">
+    <span class="pk-status-light" aria-hidden="true"></span>
+    <div><strong>Operational</strong><small>Runtime responding</small></div>
+  </div>
+</section>
 
-<div class="pk-stats">
-  <div class="pk-stat">
-    <span class="pk-stat-num">{{.Stats.Modules}}</span>
-    <span class="pk-stat-label">Modules</span>
-  </div>
-  <div class="pk-stat">
-    <span class="pk-stat-num">{{.Stats.Collections}}</span>
-    <span class="pk-stat-label">Collections</span>
-  </div>
-  <div class="pk-stat">
-    <span class="pk-stat-num">{{.Stats.Endpoints}}</span>
-    <span class="pk-stat-label">REST resources</span>
-  </div>
-  <div class="pk-stat">
-    <span class="pk-stat-num">{{.Stats.Pages}}</span>
-    <span class="pk-stat-label">Admin pages</span>
-  </div>
-</div>
+<dl class="pk-stats" aria-label="Admin surface summary">
+  <div class="pk-stat"><dt>Managed areas</dt><dd>{{.Stats.Areas}}</dd></div>
+  <div class="pk-stat"><dt>Collections</dt><dd>{{.Stats.Collections}}</dd></div>
+  <div class="pk-stat"><dt>Available actions</dt><dd>{{.Stats.Actions}}</dd></div>
+</dl>
 
-<h3 class="pk-section-title">Modules</h3>
-<div class="pk-grid">
-  {{range .Modules}}
-  <div class="pk-card">
-    <div class="pk-card-head">
-      <h4>{{.DisplayName}}</h4>
-      <code class="pk-mono pk-chip">{{.ModuleID}}</code>
+<section class="pk-section">
+  <div class="pk-section-head">
+    <div>
+      <p class="pk-eyebrow">Management index</p>
+      <h2>Application areas</h2>
     </div>
-    {{if .Description}}<p class="pk-muted pk-card-desc">{{.Description}}</p>{{end}}
+    <span class="pk-section-note">Generated from registered module contracts</span>
+  </div>
 
-    {{if .Entities}}
-    <div class="pk-card-block">
-      <span class="pk-card-label">Collections</span>
-      {{range .Entities}}
-      <a class="pk-row-link" href="{{$.BasePath}}/{{.ModuleID}}/{{.EntityName}}">
-        <span>{{.EntityName}}</span>
-        <code class="pk-mono pk-path">{{.APIPath}}</code>
-      </a>
-      {{end}}
-    </div>
-    {{end}}
-
-    {{if .Pages}}
-    <div class="pk-card-actions">
-      {{range .Pages}}<a class="pk-btn" href="{{.Path}}">{{.Title}}</a>{{end}}
+  <div class="pk-module-index">
+    {{range $index, $module := .Modules}}
+    <article class="pk-module-row">
+      <span class="pk-module-number" aria-hidden="true">{{printf "%02d" (inc $index)}}</span>
+      <div class="pk-module-copy">
+        <h3>{{$module.DisplayName}}</h3>
+        {{if $module.Description}}<p>{{$module.Description}}</p>{{end}}
+      </div>
+      <div class="pk-module-links">
+        {{range $module.Resources}}
+        <a href="{{$.BasePath}}/{{.ModuleID}}/{{.EntityName}}">
+          <span>{{.PluralLabel}}</span><span aria-hidden="true">↗</span>
+        </a>
+        {{end}}
+        {{range $module.Pages}}<a href="{{.Path}}"><span>{{.Title}}</span><span aria-hidden="true">↗</span></a>{{end}}
+      </div>
+    </article>
+    {{else}}
+    <div class="pk-empty-state">
+      <span class="pk-empty-glyph" aria-hidden="true">＋</span>
+      <h3>No management areas yet</h3>
+      <p>Register a schema-aware resource from a module to make it available here.</p>
     </div>
     {{end}}
   </div>
-  {{else}}
-  <p class="pk-muted">No admin surfaces have been registered yet.</p>
-  {{end}}
-</div>
+</section>
 {{end}}

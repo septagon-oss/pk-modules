@@ -44,6 +44,30 @@ type Handler struct {
 // NewHandler constructs a Handler wired to the given service.
 func NewHandler(svc UserService) *Handler { return &Handler{svc: svc} }
 
+type userRequest struct {
+	Email       string `json:"email"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	Password    string `json:"password"`
+	Active      bool   `json:"active"`
+}
+
+func (input userRequest) user(tenantID, id string) User {
+	return User{
+		ID:          id,
+		TenantID:    tenantID,
+		Email:       input.Email,
+		Username:    input.Username,
+		DisplayName: input.DisplayName,
+		Active:      input.Active,
+	}
+}
+
+func canSetPassword(r *http.Request) bool {
+	principal := identity.PrincipalFromContext(r.Context())
+	return principal.HasScope("admin") || principal.HasScope("users:write")
+}
+
 // RegisterRoutes mounts the handler under the canonical APIPath on the given
 // mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -129,14 +153,18 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var u User
-	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+	var input userRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if input.Password != "" && !canSetPassword(r) {
+		http.Error(w, "forbidden: users:write scope required to set a password", http.StatusForbidden)
 		return
 	}
 	// The tenant is authoritative from the request identity; a body-supplied
 	// tenant_id is ignored so a caller cannot create users in another tenant.
-	u.TenantID = tenant
+	u := input.user(tenant, "")
 	if err := h.svc.Create(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -150,6 +178,13 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), status)
 		return
 	}
+	if input.Password != "" {
+		if err := h.svc.SetPassword(r.Context(), tenant, u.ID, input.Password); err != nil {
+			_ = h.svc.Delete(r.Context(), tenant, u.ID)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
 	writeJSON(w, http.StatusCreated, &u)
 }
 
@@ -158,13 +193,16 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 	if !ok {
 		return
 	}
-	var u User
-	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
+	var input userRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
-	u.ID = id
-	u.TenantID = tenant
+	if input.Password != "" && !canSetPassword(r) {
+		http.Error(w, "forbidden: users:write scope required to set a password", http.StatusForbidden)
+		return
+	}
+	u := input.user(tenant, id)
 	if err := h.svc.Update(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -179,6 +217,12 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 		}
 		http.Error(w, err.Error(), status)
 		return
+	}
+	if input.Password != "" {
+		if err := h.svc.SetPassword(r.Context(), tenant, id, input.Password); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, &u)
 }

@@ -146,6 +146,23 @@ func TestIssueProducesPlaintextAndStoresHash(t *testing.T) {
 	}
 }
 
+func TestIssueRejectsInteractiveReservedScopes(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	for _, scope := range []string{"admin", "console:access"} {
+		if _, _, err := m.Service().Issue(
+			context.Background(),
+			"t-1",
+			"u-1",
+			"overpowered",
+			[]string{scope},
+			0,
+		); err == nil {
+			t.Fatalf("Issue accepted reserved scope %q", scope)
+		}
+	}
+}
+
 // TestIssueIgnoresBodyIdentity is the v0.2.2 regression for the key-issuance
 // impersonation hole: the HTTP issue endpoint must bind the new key to the
 // authenticated principal, never to a body-supplied user_id/tenant_id. Alice

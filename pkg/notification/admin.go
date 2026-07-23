@@ -1,90 +1,56 @@
-package notification
-
 // Implements: REQ-NOTIF-002.
 // Per: ADR-0017.
 // Discipline: C-14.
-// admin.go owns the admin shell wiring for notification_management: the
-// sidebar section, the entity-CRUD registration, and a server-rendered page
-// stub that hosts the notifications dashboard.
-//
-// ADR: ADR-0029 (file purpose declaration).
-// Convention: C-14 (every Go file declares its purpose).
+
+package notification
 
 import (
 	"fmt"
-	"html"
-	"html/template"
-	"net/http"
 
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
 
-// adminModuleID is the catalog ID used when registering admin surfaces.
-const adminModuleID = "notification_management"
+const (
+	adminModuleID = "notification_management"
+	AdminPagePath = "/admin/notification_management/Notification"
+)
 
-// AdminPagePath is the canonical path under which the notification admin
-// page is mounted by registerAdmin.
-const AdminPagePath = "/admin/notifications"
-
-var dashboardTemplate = template.Must(template.New("notification-admin").Parse(`
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>{{.Title}}</title></head>
-<body>
-<h1>{{.Title}}</h1>
-<p>{{.Description}}</p>
-<p>Notifications API: <code>{{.APIPath}}</code></p>
-<p>Subscriptions API: <code>{{.SubscriptionAPIPath}}</code></p>
-</body>
-</html>
-`))
-
-type dashboardData struct {
-	Title               string
-	Description         string
-	APIPath             string
-	SubscriptionAPIPath string
-}
-
-func renderAdminDashboard() http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		err := dashboardTemplate.Execute(w, dashboardData{
-			Title:               "Notifications",
-			Description:         "In-app notifications and channel subscriptions.",
-			APIPath:             html.EscapeString(APIPath),
-			SubscriptionAPIPath: html.EscapeString(SubscriptionAPIPath),
-		})
-		if err != nil {
-			http.Error(w, fmt.Sprintf("render: %v", err), http.StatusInternalServerError)
-		}
-	}
-}
-
-func registerAdmin(r portslib.AdminRegistrar) error {
-	if r == nil {
+func registerAdmin(registrar portslib.AdminRegistrar) error {
+	if registrar == nil {
 		return nil
 	}
-	if err := r.RegisterEntityCRUD(adminModuleID, EntityName, APIPath); err != nil {
-		return fmt.Errorf("notification: admin entity CRUD: %w", err)
-	}
-	if err := r.RegisterPage(portslib.AdminPage{
-		ModuleID: adminModuleID,
-		Path:     AdminPagePath,
-		Title:    "Notifications",
-		Render:   renderAdminDashboard(),
-	}); err != nil {
-		return fmt.Errorf("notification: admin page: %w", err)
-	}
-	if err := r.RegisterSidebarSection(portslib.SidebarSection{
-		ModuleID: adminModuleID,
-		Label:    "Notifications",
-		Order:    50,
-		Items: []portslib.SidebarItem{
-			{Path: AdminPagePath, Label: "Notification log"},
+	if err := registrar.RegisterResource(portslib.AdminResource{
+		ModuleID:      adminModuleID,
+		EntityName:    EntityName,
+		SingularLabel: "notification",
+		PluralLabel:   "Notifications",
+		Description:   "Review and send in-app messages for the current operator account.",
+		APIPath:       APIPath,
+		CanCreate:     true,
+		Columns: []portslib.AdminColumn{
+			{Key: "title", Label: "Title", Primary: true},
+			{Key: "category", Label: "Category"},
+			{Key: "severity", Label: "Severity", Kind: portslib.AdminFieldStatus},
+			{Key: "emitted_at", Label: "Sent", Kind: portslib.AdminFieldDateTime},
 		},
+		Fields: []portslib.AdminField{
+			{Key: "title", Label: "Title", Required: true, Placeholder: "Deployment complete"},
+			{Key: "category", Label: "Category", Required: true, Placeholder: "operations"},
+			{Key: "severity", Label: "Severity", Kind: portslib.AdminFieldSelect, Required: true, DefaultValue: SeverityInfo, Options: []portslib.AdminOption{
+				{Value: SeverityInfo, Label: "Information"},
+				{Value: SeverityWarning, Label: "Warning"},
+				{Value: SeverityCritical, Label: "Critical"},
+			}},
+			{Key: "body", Label: "Message", Kind: portslib.AdminFieldTextarea, Required: true, Placeholder: "Write a concise notification…"},
+		},
+		Actions: []portslib.AdminAction{{Label: "Mark read", PathSuffix: "/read"}},
 	}); err != nil {
-		return fmt.Errorf("notification: admin sidebar: %w", err)
+		return fmt.Errorf("notification: admin resource: %w", err)
 	}
-	return nil
+	return registrar.RegisterSidebarSection(portslib.SidebarSection{
+		ModuleID: adminModuleID,
+		Label:    "Operations",
+		Order:    50,
+		Items:    []portslib.SidebarItem{{Path: AdminPagePath, Label: "Notifications"}},
+	})
 }
