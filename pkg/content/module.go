@@ -36,7 +36,7 @@ const (
 	ModuleID          = "content_management"
 	ModuleName        = "Content Management"
 	ModuleDescription = "Tenant-scoped pages, posts, and snippets with markdown/HTML bodies."
-	ModuleVersion     = "0.4.0"
+	ModuleVersion     = "0.0.0"
 )
 
 // defaultSQLiteDriver matches modernc.org/sqlite's default registration name.
@@ -144,28 +144,28 @@ func (m *Module) Compose() pkmodule.Composable {
 		),
 		pkmodule.WithDependencies(
 			pkmodule.OptionalPort[tenant.TenantService](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Validate tenant references for slug uniqueness scope.",
 				Category:          pkmodule.DependencyCategoryBusiness,
 				SubCategory:       "tenant",
 				PreferredProvider: "tenant_management",
 			}),
 			pkmodule.OptionalPort[audit.AuditEmitter](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Emit content.created/updated/published/unpublished events.",
 				Category:          pkmodule.DependencyCategorySecurity,
 				SubCategory:       "audit",
 				PreferredProvider: "audit_management",
 			}),
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Mount the content admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
 			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Surface content_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,
 				SubCategory:       "health",

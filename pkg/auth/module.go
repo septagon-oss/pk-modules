@@ -38,7 +38,7 @@ const (
 	ModuleID          = "auth_management"
 	ModuleName        = "Auth Management"
 	ModuleDescription = "Session-cookie login flow on top of user_management."
-	ModuleVersion     = "0.4.0"
+	ModuleVersion     = "0.0.0"
 )
 
 // defaultSQLiteDriver matches modernc.org/sqlite's default registration name.
@@ -186,28 +186,28 @@ func (m *Module) Compose() pkmodule.Composable {
 		),
 		pkmodule.WithDependencies(
 			pkmodule.RequiresPort[user.UserBoundaryReader](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Resolve user credentials at login time.",
 				Category:          pkmodule.DependencyCategoryBusiness,
 				SubCategory:       "user",
 				PreferredProvider: "user_management",
 			}),
 			pkmodule.OptionalPort[audit.AuditEmitter](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Emit auth.login_success and auth.login_failure events.",
 				Category:          pkmodule.DependencyCategorySecurity,
 				SubCategory:       "audit",
 				PreferredProvider: "audit_management",
 			}),
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Mount the sessions admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
 			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Surface auth_management session store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,
 				SubCategory:       "health",

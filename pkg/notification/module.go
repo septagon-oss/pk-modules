@@ -37,7 +37,7 @@ const (
 	ModuleID          = "notification_management"
 	ModuleName        = "Notification Management"
 	ModuleDescription = "In-app notifications with pluggable channels and per-user subscriptions."
-	ModuleVersion     = "0.4.0"
+	ModuleVersion     = "0.0.0"
 )
 
 // defaultSQLiteDriver matches modernc.org/sqlite's default registration name.
@@ -156,28 +156,28 @@ func (m *Module) Compose() pkmodule.Composable {
 		),
 		pkmodule.WithDependencies(
 			pkmodule.OptionalPort[user.UserBoundaryReader](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Validate recipient identity at dispatch time.",
 				Category:          pkmodule.DependencyCategoryBusiness,
 				SubCategory:       "user",
 				PreferredProvider: "user_management",
 			}),
 			pkmodule.OptionalPort[audit.AuditEmitter](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Emit notification.dispatched events.",
 				Category:          pkmodule.DependencyCategorySecurity,
 				SubCategory:       "audit",
 				PreferredProvider: "audit_management",
 			}),
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Mount the notifications admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
 			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Surface notification_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,
 				SubCategory:       "health",

@@ -600,8 +600,8 @@ func TestComposeViaCatalog(t *testing.T) {
 			{ID: auth.ModuleID, New: func() pkmodule.Composable { return c }},
 			{ID: "user_management", New: func() pkmodule.Composable {
 				return pkmodule.Must(
-					pkmodule.Metadata{ID: "user_management", Version: "0.4.0"},
-					pkmodule.WithProvides(pkmodule.Provide[user.UserBoundaryReader]("0.4.0")),
+					pkmodule.Metadata{ID: "user_management", Version: "0.0.0"},
+					pkmodule.WithProvides(pkmodule.Provide[user.UserBoundaryReader]("0.0.0")),
 				)
 			}},
 		}, []string{auth.ModuleID, "user_management"})).

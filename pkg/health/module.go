@@ -29,7 +29,7 @@ const (
 	ModuleID          = "health_management"
 	ModuleName        = "Health Management"
 	ModuleDescription = "Aggregates module health checks and serves /healthz."
-	ModuleVersion     = "0.4.0"
+	ModuleVersion     = "0.0.0"
 )
 
 // Module is the OSS health_management module. Pro embeds *Module and adds
@@ -101,7 +101,7 @@ func (m *Module) Compose() pkmodule.Composable {
 		),
 		pkmodule.WithDependencies(
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.4.0",
+				Version:           "0.0.0",
 				Purpose:           "Mount the health admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
