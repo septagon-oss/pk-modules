@@ -193,6 +193,23 @@ func TestHTTPHandlerServesAdminJavaScript(t *testing.T) {
 	}
 }
 
+func TestAdminShellSetsBrowserSecurityHeaders(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "frame-ancestors 'none'") ||
+		!strings.Contains(got, "script-src 'self'") {
+		t.Fatalf("Content-Security-Policy = %q", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("Referrer-Policy = %q, want no-referrer", got)
+	}
+}
+
 func TestRegisterResourceRejectsRawUnknownShape(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)

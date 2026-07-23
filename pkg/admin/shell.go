@@ -278,7 +278,15 @@ func (s *Shell) SidebarSections() []portslib.SidebarSection {
 
 // ServeHTTP routes admin requests.
 func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(
+		"Content-Security-Policy",
+		"default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+	)
+	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
