@@ -104,34 +104,56 @@ type AdminColumn struct {
 	Primary bool           `json:"primary,omitempty"`
 }
 
+// AdminConditionOperator selects the comparison used for a row-aware admin
+// control. Empty and not_empty treat nil, empty strings, and empty arrays as
+// empty; equals compares the string representation with Value.
+type AdminConditionOperator string
+
+const (
+	AdminConditionEquals   AdminConditionOperator = "equals"
+	AdminConditionEmpty    AdminConditionOperator = "empty"
+	AdminConditionNotEmpty AdminConditionOperator = "not_empty"
+)
+
+// AdminRowCondition controls whether a row-level edit, delete, or lifecycle
+// action is useful for the current resource state.
+type AdminRowCondition struct {
+	Field    string                 `json:"field"`
+	Operator AdminConditionOperator `json:"operator"`
+	Value    string                 `json:"value,omitempty"`
+}
+
 // AdminAction describes a resource-row lifecycle action. PathSuffix is
 // appended to "<api path>/<escaped id>" and Method defaults to POST.
 type AdminAction struct {
-	Label      string `json:"label"`
-	Method     string `json:"method,omitempty"`
-	PathSuffix string `json:"path_suffix"`
-	Variant    string `json:"variant,omitempty"`
-	Confirm    string `json:"confirm,omitempty"`
+	Label       string             `json:"label"`
+	Method      string             `json:"method,omitempty"`
+	PathSuffix  string             `json:"path_suffix"`
+	Variant     string             `json:"variant,omitempty"`
+	Confirm     string             `json:"confirm,omitempty"`
+	VisibleWhen *AdminRowCondition `json:"visible_when,omitempty"`
 }
 
 // AdminResource is the complete, framework-neutral description of a managed
 // API resource. The reference admin uses it to render useful columns and
 // typed forms instead of exposing raw JSON editors.
 type AdminResource struct {
-	ModuleID      string        `json:"module_id"`
-	EntityName    string        `json:"entity_name"`
-	SingularLabel string        `json:"singular_label"`
-	PluralLabel   string        `json:"plural_label"`
-	Description   string        `json:"description,omitempty"`
-	APIPath       string        `json:"api_path"`
-	IDKey         string        `json:"id_key,omitempty"`
-	Columns       []AdminColumn `json:"columns"`
-	Fields        []AdminField  `json:"fields,omitempty"`
-	CanCreate     bool          `json:"can_create,omitempty"`
-	CanEdit       bool          `json:"can_edit,omitempty"`
-	CanDelete     bool          `json:"can_delete,omitempty"`
-	Actions       []AdminAction `json:"actions,omitempty"`
-	SuccessField  string        `json:"success_field,omitempty"`
+	ModuleID      string             `json:"module_id"`
+	EntityName    string             `json:"entity_name"`
+	SingularLabel string             `json:"singular_label"`
+	PluralLabel   string             `json:"plural_label"`
+	Description   string             `json:"description,omitempty"`
+	APIPath       string             `json:"api_path"`
+	IDKey         string             `json:"id_key,omitempty"`
+	Columns       []AdminColumn      `json:"columns"`
+	Fields        []AdminField       `json:"fields,omitempty"`
+	CanCreate     bool               `json:"can_create,omitempty"`
+	CanEdit       bool               `json:"can_edit,omitempty"`
+	EditWhen      *AdminRowCondition `json:"edit_when,omitempty"`
+	CanDelete     bool               `json:"can_delete,omitempty"`
+	DeleteWhen    *AdminRowCondition `json:"delete_when,omitempty"`
+	Actions       []AdminAction      `json:"actions,omitempty"`
+	SuccessField  string             `json:"success_field,omitempty"`
 }
 
 // AdminRegistrar lets modules register schema-aware resources and custom

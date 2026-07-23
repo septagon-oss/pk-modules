@@ -66,6 +66,19 @@
     return payload && typeof payload === "object" ? [payload] : [];
   };
 
+  const matchesCondition = (row, condition) => {
+    if (!condition) return true;
+    const value = valueAt(row, condition.field);
+    const empty = value === null
+      || value === undefined
+      || value === ""
+      || (Array.isArray(value) && value.length === 0);
+    if (condition.operator === "empty") return empty;
+    if (condition.operator === "not_empty") return !empty;
+    if (condition.operator === "equals") return String(value) === condition.value;
+    return false;
+  };
+
   const displayDate = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
@@ -201,10 +214,20 @@
       visible.forEach((row) => {
         const tr = document.createElement("tr");
         const id = valueAt(row, resource.id_key || "id");
+        const canEdit = Boolean(
+          resource.can_edit && id && matchesCondition(row, resource.edit_when),
+        );
+        const canDelete = Boolean(
+          resource.can_delete && id && matchesCondition(row, resource.delete_when),
+        );
+        const visibleActions = (resource.actions || []).filter(
+          (action) => matchesCondition(row, action.visible_when),
+        );
         resource.columns.forEach((column) => {
           const cell = document.createElement("td");
+          cell.dataset.label = column.label || column.key;
           const value = valueAt(row, column.key);
-          if (column.primary && resource.can_edit && id) {
+          if (column.primary && canEdit) {
             const link = document.createElement("a");
             link.href = `${listPath}/${encodeURIComponent(id)}`;
             appendValue(link, value, column);
@@ -218,26 +241,33 @@
         if (resource.can_edit || resource.can_delete || (resource.actions || []).length) {
           const actions = document.createElement("td");
           actions.className = "pk-row-actions";
-          if (resource.can_edit && id) {
+          actions.dataset.label = "Actions";
+          if (canEdit) {
             const edit = document.createElement("a");
             edit.className = "pk-table-action";
             edit.href = `${listPath}/${encodeURIComponent(id)}`;
             edit.textContent = "Edit";
             actions.appendChild(edit);
           }
-          (resource.actions || []).forEach((action) => {
+          visibleActions.forEach((action) => {
             actions.appendChild(actionButton(
               action.label,
               action.variant === "danger" ? "pk-table-action pk-table-action-danger" : "pk-table-action",
               (event) => runAction(event.currentTarget, row, action),
             ));
           });
-          if (resource.can_delete && id) {
+          if (canDelete) {
             actions.appendChild(actionButton(
               "Delete",
               "pk-table-action pk-table-action-danger",
               (event) => deleteRow(event.currentTarget, row),
             ));
+          }
+          if (!canEdit && !canDelete && visibleActions.length === 0) {
+            const unavailable = document.createElement("span");
+            unavailable.className = "pk-no-actions";
+            unavailable.textContent = "No actions available";
+            actions.appendChild(unavailable);
           }
           tr.appendChild(actions);
         }

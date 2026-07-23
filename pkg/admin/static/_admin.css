@@ -803,7 +803,7 @@ h3 {
 }
 
 .pk-table-action {
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   padding: 7px 9px;
@@ -825,6 +825,15 @@ h3 {
 
 .pk-table-action-danger {
   color: var(--pk-color-status-danger, #9e3833);
+}
+
+.pk-no-actions {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 9px;
+  color: var(--pk-color-text-muted, #5f6b65);
+  font-size: 12px;
 }
 
 .pk-status,
@@ -1263,6 +1272,80 @@ h3 {
 
   .pk-toolbar > .pk-btn {
     align-self: flex-start;
+  }
+
+  .pk-table-shell {
+    overflow: visible;
+    background: transparent;
+    border: 0;
+  }
+
+  .pk-admin-table {
+    min-width: 0;
+    display: block;
+  }
+
+  .pk-admin-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .pk-admin-table tbody {
+    display: grid;
+    gap: 14px;
+  }
+
+  .pk-admin-table tbody tr {
+    display: block;
+    background: var(--pk-color-surface-primary, #fffdf7);
+    border: 1px solid var(--pk-color-border-default, #cbc5b8);
+  }
+
+  .pk-admin-table th,
+  .pk-admin-table td {
+    width: 100%;
+    max-width: none;
+  }
+
+  .pk-admin-table td {
+    display: grid;
+    grid-template-columns: minmax(92px, .34fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .pk-admin-table td::before {
+    content: attr(data-label);
+    color: var(--pk-color-text-muted, #5f6b65);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .pk-row-actions {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 8px;
+    white-space: normal;
+    text-align: start !important;
+  }
+
+  .pk-row-actions::before {
+    flex: 0 0 100%;
+  }
+
+  .pk-row-actions .pk-table-action {
+    padding-inline: 12px;
+    background: var(--pk-color-surface-secondary, #f2efe7);
+    border: 1px solid var(--pk-color-border-default, #cbc5b8);
   }
 
   .pk-field-grid {

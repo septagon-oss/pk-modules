@@ -52,8 +52,18 @@ func registerAdmin(registrar portslib.AdminRegistrar) error {
 			{Key: "body", Label: "Body", Kind: portslib.AdminFieldTextarea, Required: true, Placeholder: "Write the content body…"},
 		},
 		Actions: []portslib.AdminAction{
-			{Label: "Publish", PathSuffix: "/publish"},
-			{Label: "Unpublish", PathSuffix: "/unpublish", Confirm: "Unpublish this content item?"},
+			{
+				Label: "Publish", PathSuffix: "/publish",
+				VisibleWhen: &portslib.AdminRowCondition{
+					Field: "published_at", Operator: portslib.AdminConditionEmpty,
+				},
+			},
+			{
+				Label: "Unpublish", PathSuffix: "/unpublish", Confirm: "Unpublish this content item?",
+				VisibleWhen: &portslib.AdminRowCondition{
+					Field: "published_at", Operator: portslib.AdminConditionNotEmpty,
+				},
+			},
 		},
 	}); err != nil {
 		return fmt.Errorf("content: admin resource: %w", err)

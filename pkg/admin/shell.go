@@ -182,6 +182,12 @@ func normalizeResource(resource *portslib.AdminResource) error {
 			field.Kind = portslib.AdminFieldText
 		}
 	}
+	if err := normalizeRowCondition("edit_when", resource.EditWhen); err != nil {
+		return err
+	}
+	if err := normalizeRowCondition("delete_when", resource.DeleteWhen); err != nil {
+		return err
+	}
 	for i := range resource.Actions {
 		action := &resource.Actions[i]
 		action.Label = strings.TrimSpace(action.Label)
@@ -198,6 +204,33 @@ func normalizeResource(resource *portslib.AdminResource) error {
 		default:
 			return fmt.Errorf("admin: RegisterResource: unsupported action method %q", action.Method)
 		}
+		if err := normalizeRowCondition("action visible_when", action.VisibleWhen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeRowCondition(name string, condition *portslib.AdminRowCondition) error {
+	if condition == nil {
+		return nil
+	}
+	condition.Field = strings.TrimSpace(condition.Field)
+	condition.Value = strings.TrimSpace(condition.Value)
+	if condition.Field == "" {
+		return fmt.Errorf("admin: RegisterResource: %s requires a field", name)
+	}
+	switch condition.Operator {
+	case portslib.AdminConditionEquals:
+		if condition.Value == "" {
+			return fmt.Errorf("admin: RegisterResource: %s equals condition requires a value", name)
+		}
+	case portslib.AdminConditionEmpty, portslib.AdminConditionNotEmpty:
+		if condition.Value != "" {
+			return fmt.Errorf("admin: RegisterResource: %s %s condition cannot carry a value", name, condition.Operator)
+		}
+	default:
+		return fmt.Errorf("admin: RegisterResource: %s has unsupported operator %q", name, condition.Operator)
 	}
 	return nil
 }

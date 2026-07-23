@@ -191,6 +191,10 @@ func TestHTTPHandlerServesAdminJavaScript(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "pk-resource-form") {
 		t.Fatal("admin behavior asset is missing the typed form controller")
 	}
+	if !strings.Contains(rec.Body.String(), `cell.dataset.label = column.label`) ||
+		!strings.Contains(rec.Body.String(), `actions.dataset.label = "Actions"`) {
+		t.Fatal("admin behavior asset is missing responsive table labels")
+	}
 }
 
 func TestAdminShellSetsBrowserSecurityHeaders(t *testing.T) {
@@ -217,6 +221,18 @@ func TestRegisterResourceRejectsRawUnknownShape(t *testing.T) {
 	resource.Columns = nil
 	if err := m.Registrar().RegisterResource(resource); err == nil {
 		t.Fatal("RegisterResource accepted a descriptor without readable columns")
+	}
+}
+
+func TestRegisterResourceRejectsInvalidRowCondition(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	resource := testResource()
+	resource.EditWhen = &portslib.AdminRowCondition{
+		Field: "status", Operator: portslib.AdminConditionEquals,
+	}
+	if err := m.Registrar().RegisterResource(resource); err == nil {
+		t.Fatal("RegisterResource accepted an equals condition without a value")
 	}
 }
 
@@ -257,6 +273,8 @@ func TestAdminCSSCarriesResponsiveAndAccessibilityGuards(t *testing.T) {
 		":focus-visible",
 		"prefers-reduced-motion",
 		"overflow-x: hidden",
+		"grid-template-columns: minmax(92px, .34fr) minmax(0, 1fr)",
+		".pk-row-actions .pk-table-action",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("responsive stylesheet missing %q", want)
