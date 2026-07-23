@@ -40,6 +40,7 @@ const (
 	ModuleName        = "API Key Management"
 	ModuleDescription = "Tenant-scoped API key issuance, verification, and revocation."
 	ModuleVersion     = "0.0.0"
+	ReleaseVersion    = "0.4.0"
 )
 
 // defaultSQLiteDriver matches modernc.org/sqlite's default registration name.
@@ -89,7 +90,7 @@ func NewModule(opts ...Option) (*Module, error) {
 			ID:          ModuleID,
 			Name:        ModuleName,
 			Description: ModuleDescription,
-			Version:     ModuleVersion,
+			Version:     ReleaseVersion,
 		},
 		store:  st,
 		hasher: cfg.hasher,
@@ -166,7 +167,7 @@ func (m *Module) Compose() pkmodule.Composable {
 				PreferredProvider: "audit_management",
 			}),
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.0.0",
+				Version:           portslib.AdminRegistrarContractVersion,
 				Purpose:           "Mount the API keys admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",

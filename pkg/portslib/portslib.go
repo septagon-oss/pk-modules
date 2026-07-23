@@ -156,6 +156,11 @@ type AdminResource struct {
 	SuccessField  string             `json:"success_field,omitempty"`
 }
 
+// AdminRegistrarContractVersion is the compatibility version of
+// AdminRegistrar. The schema-aware RegisterResource API replaced the v0.3
+// RegisterEntityCRUD API and therefore starts a new contract line in v0.4.
+const AdminRegistrarContractVersion = "0.4.0"
+
 // AdminRegistrar lets modules register schema-aware resources and custom
 // pages with the host application's admin shell.
 type AdminRegistrar interface {

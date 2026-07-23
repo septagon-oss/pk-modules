@@ -67,6 +67,21 @@ func main() {
 - `pkg/coremodules` — the smallest composable bundle wiring tenant + audit + content for OSS examples and downstream distributions. Note that `coremodules.Bundle()` is not the nine-module starter set the PlatformKit front door composes: it wires three contract-only composition descriptors, while the starter app in `pk-apps` composes the full nine modules above with their stores, services, and handlers.
 - `pkg/portslib` — the shared port contracts modules consume explicitly instead of importing one another.
 
+## Version namespaces
+
+Each module exposes two deliberately separate versions:
+
+- `ReleaseVersion` is the `pk-modules` release shown in catalog/runtime
+  metadata. It is `0.4.0` for this review build.
+- `ModuleVersion` remains the module's port-contract version, so an unrelated
+  release does not invalidate compatible third-party modules. Existing
+  contracts remain at `0.0.0`.
+
+The schema-aware `AdminRegistrar` API is the exception because it replaces the
+older `RegisterEntityCRUD` interface. Its contract is `0.4.0`; consumers should
+declare `portslib.AdminRegistrarContractVersion` instead of copying a version
+literal.
+
 ## Verify
 
 ```bash

@@ -37,6 +37,7 @@ const (
 	ModuleName        = "User Management"
 	ModuleDescription = "Tenant-scoped user CRUD with pluggable password hashing."
 	ModuleVersion     = "0.0.0"
+	ReleaseVersion    = "0.4.0"
 )
 
 // defaultSQLiteDriver is the driver name pk-modules expects callers to have
@@ -82,7 +83,7 @@ func NewModule(opts ...Option) (*Module, error) {
 			ID:          ModuleID,
 			Name:        ModuleName,
 			Description: ModuleDescription,
-			Version:     ModuleVersion,
+			Version:     ReleaseVersion,
 		},
 		store:  st,
 		hasher: cfg.hasher,
@@ -153,7 +154,7 @@ func (m *Module) Compose() pkmodule.Composable {
 		),
 		pkmodule.WithDependencies(
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.0.0",
+				Version:           portslib.AdminRegistrarContractVersion,
 				Purpose:           "Mount the users admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
