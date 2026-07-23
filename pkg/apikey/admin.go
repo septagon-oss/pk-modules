@@ -38,7 +38,7 @@ func registerAdmin(registrar portslib.AdminRegistrar) error {
 		},
 		Fields: []portslib.AdminField{
 			{Key: "name", Label: "Name", Required: true, Placeholder: "Production sync", Help: "A recognizable name for future revocation."},
-			{Key: "scopes", Label: "Scopes", Kind: portslib.AdminFieldTags, Required: true, Placeholder: "polls:read, polls:write", Help: "Comma-separated capabilities. Console and admin scopes are reserved."},
+			{Key: "scopes", Label: "Scopes", Kind: portslib.AdminFieldTags, Required: true, Placeholder: "resource:read, resource:write", Help: "Comma-separated capabilities. Console and admin scopes are reserved."},
 			{Key: "ttl_seconds", Label: "Lifetime in seconds", Kind: portslib.AdminFieldNumber, Min: 60, Placeholder: "2592000", Help: "Leave empty for no automatic expiry."},
 		},
 	}); err != nil {
