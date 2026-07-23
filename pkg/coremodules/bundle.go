@@ -28,7 +28,7 @@ func Bundle() module.Bundle {
 func NewTenant() module.Composable {
 	return module.Must(
 		module.Metadata{ID: "tenant", Name: "Tenant", Description: "Tenant context"},
-		module.WithProvides(module.Provide[TenantService]("0.0.0")),
+		module.WithProvides(module.Provide[TenantService]("0.4.0")),
 	)
 }
 
@@ -36,9 +36,9 @@ func NewTenant() module.Composable {
 func NewAudit() module.Composable {
 	return module.Must(
 		module.Metadata{ID: "audit", Name: "Audit", Description: "Audit event recording"},
-		module.WithProvides(module.Provide[AuditService]("0.0.0")),
+		module.WithProvides(module.Provide[AuditService]("0.4.0")),
 		module.WithDependencies(module.RequiresPort[TenantService](module.PortSpec{
-			Version:           "0.0.0",
+			Version:           "0.4.0",
 			Purpose:           "scope audit records by tenant",
 			PreferredProvider: "tenant",
 		})),
@@ -51,12 +51,12 @@ func NewContent() module.Composable {
 		module.Metadata{ID: "content", Name: "Content", Description: "Public content"},
 		module.WithDependencies(
 			module.RequiresPort[TenantService](module.PortSpec{
-				Version:           "0.0.0",
+				Version:           "0.4.0",
 				Purpose:           "scope content by tenant",
 				PreferredProvider: "tenant",
 			}),
 			module.RequiresPort[AuditService](module.PortSpec{
-				Version:           "0.0.0",
+				Version:           "0.4.0",
 				Purpose:           "audit content publication",
 				PreferredProvider: "audit",
 			}),

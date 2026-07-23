@@ -36,7 +36,7 @@ const (
 	ModuleID          = "user_management"
 	ModuleName        = "User Management"
 	ModuleDescription = "Tenant-scoped user CRUD with pluggable password hashing."
-	ModuleVersion     = "0.0.0"
+	ModuleVersion     = "0.4.0"
 )
 
 // defaultSQLiteDriver is the driver name pk-modules expects callers to have
@@ -153,21 +153,21 @@ func (m *Module) Compose() pkmodule.Composable {
 		),
 		pkmodule.WithDependencies(
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.0.0",
+				Version:           "0.4.0",
 				Purpose:           "Mount the users admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
 			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
-				Version:           "0.0.0",
+				Version:           "0.4.0",
 				Purpose:           "Surface user_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,
 				SubCategory:       "health",
 				PreferredProvider: "health_management",
 			}),
 			pkmodule.OptionalPort[tenant.TenantService](pkmodule.PortSpec{
-				Version:           "0.0.0",
+				Version:           "0.4.0",
 				Purpose:           "Validate tenant references against the tenant module.",
 				Category:          pkmodule.DependencyCategoryBusiness,
 				SubCategory:       "tenant",

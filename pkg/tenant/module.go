@@ -33,7 +33,7 @@ const (
 	ModuleID          = "tenant_management"
 	ModuleName        = "Tenant Management"
 	ModuleDescription = "Tenant CRUD, tenant context propagation, and isolation contracts."
-	ModuleVersion     = "0.0.0"
+	ModuleVersion     = "0.4.0"
 )
 
 // defaultSQLiteDriver is the driver name pk-modules expects callers to have
@@ -144,14 +144,14 @@ func (m *Module) Compose() pkmodule.Composable {
 		),
 		pkmodule.WithDependencies(
 			pkmodule.OptionalPort[portslib.AdminRegistrar](pkmodule.PortSpec{
-				Version:           "0.0.0",
+				Version:           "0.4.0",
 				Purpose:           "Mount the tenants admin page.",
 				Category:          pkmodule.DependencyCategoryUI,
 				SubCategory:       "admin",
 				PreferredProvider: "admin_management",
 			}),
 			pkmodule.OptionalPort[portslib.HealthRegistrar](pkmodule.PortSpec{
-				Version:           "0.0.0",
+				Version:           "0.4.0",
 				Purpose:           "Surface tenant_management store reachability.",
 				Category:          pkmodule.DependencyCategoryMonitoring,
 				SubCategory:       "health",
