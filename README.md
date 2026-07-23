@@ -43,7 +43,7 @@ func main() {
 
 	// Drive the module through its public service port.
 	ctx := context.Background()
-	t := &tenant.Tenant{Slug: "acme", Name: "Acme Inc."}
+	t := &tenant.Tenant{Slug: "example-org", Name: "Example Organization"}
 	if err := m.Service().Create(ctx, t); err != nil {
 		log.Fatal(err)
 	}

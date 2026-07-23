@@ -32,11 +32,11 @@ func newProAdminModule(t *testing.T, brand string) *proAdminModule {
 
 func TestProEmbeddingCompiles(t *testing.T) {
 	t.Parallel()
-	p := newProAdminModule(t, "Acme")
-	if p.Title() != "Acme Admin" {
+	p := newProAdminModule(t, "Custom")
+	if p.Title() != "Custom Admin" {
 		t.Fatalf("embedded Module.Title() = %q", p.Title())
 	}
-	if p.customBrand != "Acme" {
+	if p.customBrand != "Custom" {
 		t.Fatal("Pro field lost during embedding")
 	}
 	// Registrar() still callable through the embedded *Module.

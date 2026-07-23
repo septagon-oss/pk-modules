@@ -54,8 +54,8 @@ func TestNewModuleDefaults(t *testing.T) {
 
 func TestWithTitleAndBasePath(t *testing.T) {
 	t.Parallel()
-	m := newModule(t, admin.WithTitle("Acme"), admin.WithBasePath("/console"))
-	if m.Title() != "Acme" {
+	m := newModule(t, admin.WithTitle("Workspace"), admin.WithBasePath("/console"))
+	if m.Title() != "Workspace" {
 		t.Fatalf("title = %q", m.Title())
 	}
 	if m.BasePath() != "/console" {

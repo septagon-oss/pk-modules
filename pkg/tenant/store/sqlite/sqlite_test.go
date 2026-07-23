@@ -45,7 +45,7 @@ func TestCRUDRoundTrip(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	in := &store.Tenant{ID: "t1", Slug: "acme", Name: "Acme Inc."}
+	in := &store.Tenant{ID: "t1", Slug: "example-org", Name: "Example Organization"}
 	if err := s.Create(ctx, in); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -57,12 +57,12 @@ func TestCRUDRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.Slug != "acme" || got.Name != "Acme Inc." {
+	if got.Slug != "example-org" || got.Name != "Example Organization" {
 		t.Fatalf("round-trip mismatch: %+v", got)
 	}
 
-	got.Name = "Acme Corp"
-	got.Slug = "acme-corp"
+	got.Name = "Renamed Organization"
+	got.Slug = "renamed-org"
 	if err := s.Update(ctx, got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestCRUDRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get after update: %v", err)
 	}
-	if after.Name != "Acme Corp" || after.Slug != "acme-corp" {
+	if after.Name != "Renamed Organization" || after.Slug != "renamed-org" {
 		t.Fatalf("Update not persisted: %+v", after)
 	}
 

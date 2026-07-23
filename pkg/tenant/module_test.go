@@ -135,7 +135,7 @@ func TestServiceCreateThenGet(t *testing.T) {
 
 	m := newModule(t)
 	ctx := context.Background()
-	tn := &tenant.Tenant{Slug: "acme", Name: "Acme Inc."}
+	tn := &tenant.Tenant{Slug: "example-org", Name: "Example Organization"}
 	if err := m.Service().Create(ctx, tn); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestServiceCreateThenGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.Slug != "acme" || got.Name != "Acme Inc." {
+	if got.Slug != "example-org" || got.Name != "Example Organization" {
 		t.Fatalf("Get returned unexpected tenant: %+v", got)
 	}
 }
@@ -217,11 +217,11 @@ func TestServiceUpdateChangesName(t *testing.T) {
 
 	m := newModule(t)
 	ctx := context.Background()
-	tn := &tenant.Tenant{Slug: "acme", Name: "Acme Inc."}
+	tn := &tenant.Tenant{Slug: "example-org", Name: "Example Organization"}
 	if err := m.Service().Create(ctx, tn); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	tn.Name = "Acme Corp."
+	tn.Name = "Renamed Organization"
 	if err := m.Service().Update(ctx, tn); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestServiceUpdateChangesName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.Name != "Acme Corp." {
+	if got.Name != "Renamed Organization" {
 		t.Fatalf("Name after Update = %q", got.Name)
 	}
 }
@@ -239,8 +239,8 @@ func TestDuplicateSlugReturnsError(t *testing.T) {
 
 	m := newModule(t)
 	ctx := context.Background()
-	a := &tenant.Tenant{ID: "1", Slug: "acme", Name: "Acme"}
-	b := &tenant.Tenant{ID: "2", Slug: "acme", Name: "Other Acme"}
+	a := &tenant.Tenant{ID: "1", Slug: "example-org", Name: "Example Organization"}
+	b := &tenant.Tenant{ID: "2", Slug: "example-org", Name: "Other Organization"}
 	if err := m.Service().Create(ctx, a); err != nil {
 		t.Fatalf("first Create: %v", err)
 	}
@@ -339,10 +339,10 @@ func TestEntityValidate(t *testing.T) {
 		in      tenant.Tenant
 		wantErr bool
 	}{
-		{"ok", tenant.Tenant{Slug: "acme", Name: "Acme"}, false},
-		{"missing slug", tenant.Tenant{Name: "Acme"}, true},
-		{"missing name", tenant.Tenant{Slug: "acme"}, true},
-		{"whitespace slug", tenant.Tenant{Slug: "   ", Name: "Acme"}, true},
+		{"ok", tenant.Tenant{Slug: "example-org", Name: "Example Organization"}, false},
+		{"missing slug", tenant.Tenant{Name: "Example Organization"}, true},
+		{"missing name", tenant.Tenant{Slug: "example-org"}, true},
+		{"whitespace slug", tenant.Tenant{Slug: "   ", Name: "Example Organization"}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

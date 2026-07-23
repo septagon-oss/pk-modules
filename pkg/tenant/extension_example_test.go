@@ -54,7 +54,7 @@ func TestProEmbeddingCompiles(t *testing.T) {
 	// The embedded Module's Service() works through the outer type without
 	// any Pro-side plumbing. This is the chainability invariant for OSS.
 	ctx := context.Background()
-	in := &tenant.Tenant{Slug: "pro-acme", Name: "Pro Acme"}
+	in := &tenant.Tenant{Slug: "partner-org", Name: "Partner Organization"}
 	if err := pro.Service().Create(ctx, in); err != nil {
 		t.Fatalf("pro.Service().Create: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestProEmbeddingCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pro.Service().Get: %v", err)
 	}
-	if got.Slug != "pro-acme" {
+	if got.Slug != "partner-org" {
 		t.Fatalf("Get returned wrong slug: %q", got.Slug)
 	}
 }
