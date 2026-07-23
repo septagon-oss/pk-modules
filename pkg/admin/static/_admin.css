@@ -1383,7 +1383,7 @@ h3 {
 
 @media (max-width: 420px) {
   .pk-brand strong {
-    max-width: 110px;
+    max-width: 135px;
   }
 
   .pk-header-tools {
@@ -1398,9 +1398,10 @@ h3 {
   }
 
   .pk-icon-btn::before {
-    content: "↪";
+    content: "Exit";
     color: var(--pk-color-sidebar-text, #eff4e9);
-    font-size: 18px;
+    font-size: 12px;
+    font-weight: 750;
   }
 
   .pk-admin-content {

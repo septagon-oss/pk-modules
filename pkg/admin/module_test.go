@@ -275,6 +275,7 @@ func TestAdminCSSCarriesResponsiveAndAccessibilityGuards(t *testing.T) {
 		"overflow-x: hidden",
 		"grid-template-columns: minmax(92px, .34fr) minmax(0, 1fr)",
 		".pk-row-actions .pk-table-action",
+		`content: "Exit"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("responsive stylesheet missing %q", want)
