@@ -15,7 +15,6 @@ Reference OSS modules that prove PlatformKit's public contracts. Each module is 
 - Audit management: audit trails, event capture, compliance checks
 - Admin management: admin interface, dashboard, settings
 - Health monitoring: aggregated health checks, alert derivation
-- Core modules bundle: composed module set with SQLite stores and HTTP wiring
 
 ## Out of Scope
 

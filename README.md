@@ -8,7 +8,7 @@
 [![CI](https://github.com/septagon-oss/pk-modules/actions/workflows/go.yml/badge.svg)](https://github.com/septagon-oss/pk-modules/actions/workflows/go.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-`pk-modules` is the starter OSS module pack for the open-source PlatformKit family. It ships small, self-contained business modules — tenant, user, auth, API key, content, notification, audit, admin, and health — that demonstrate the public PlatformKit module contract end to end: an entity, a `store.Store` persistence port with a SQLite reference implementation, a service, and an HTTP handler. Each module is wired with functional options and composes into a host application through pk-core's dependency-injection bundle, so community modules can follow the same patterns while vertical, client, and hosted-operational modules live in Pro/private packs.
+`pk-modules` is the starter OSS module pack for the open-source PlatformKit family. It ships small, self-contained business modules — tenant, user, auth, API key, content, notification, audit, admin, and health — that implement the public PlatformKit module contract end to end: an entity, a `store.Store` persistence port with a SQLite reference implementation, a service, and an HTTP handler. Each module is wired with functional options and composes into a host application through pk-core's dependency-injection bundle, so community modules can follow the same patterns while vertical, client, and hosted-operational modules live in Pro/private packs.
 
 ## Install
 
