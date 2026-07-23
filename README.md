@@ -64,7 +64,6 @@ func main() {
   operations; the shell renders real tables and forms without a raw JSON
   editor or frontend build step.
 - Every data module exposes a `store.Store` persistence port plus a `store/sqlite` reference implementation built on `modernc.org/sqlite` (pure-Go, no cgo).
-- `pkg/coremodules` — the smallest composable bundle wiring tenant + audit + content for OSS examples and downstream distributions. Note that `coremodules.Bundle()` is not the nine-module starter set the PlatformKit front door composes: it wires three contract-only composition descriptors, while the starter app in `pk-apps` composes the full nine modules above with their stores, services, and handlers.
 - `pkg/portslib` — the shared port contracts modules consume explicitly instead of importing one another.
 
 ## Version namespaces
