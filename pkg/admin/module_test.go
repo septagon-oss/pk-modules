@@ -162,6 +162,32 @@ func TestHTTPHandlerServesEntityFormNew(t *testing.T) {
 	}
 }
 
+func TestPasswordFieldUsesUTF8ByteLimit(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	resource := testResource()
+	resource.Fields = append(resource.Fields, portslib.AdminField{
+		Key: "password", Label: "Password", Kind: portslib.AdminFieldPassword, Max: 72,
+	})
+	if err := m.Registrar().RegisterResource(resource); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/admin/user_management/User/new", nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="password"`) ||
+		!strings.Contains(body, `data-max-utf8-bytes="72"`) {
+		t.Fatalf("password field is missing its UTF-8 byte limit: %s", body)
+	}
+	if strings.Contains(body, `maxlength="72"`) {
+		t.Fatal("password byte limit was rendered as a character-count maxlength")
+	}
+}
+
 func TestHTTPHandlerServesStaticCSS(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
@@ -190,6 +216,10 @@ func TestHTTPHandlerServesAdminJavaScript(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "pk-resource-form") {
 		t.Fatal("admin behavior asset is missing the typed form controller")
+	}
+	if !strings.Contains(rec.Body.String(), "new TextEncoder()") ||
+		!strings.Contains(rec.Body.String(), "setCustomValidity") {
+		t.Fatal("admin behavior asset is missing UTF-8 byte-limit validation")
 	}
 	if !strings.Contains(rec.Body.String(), `cell.dataset.label = column.label`) ||
 		!strings.Contains(rec.Body.String(), `actions.dataset.label = "Actions"`) {

@@ -353,6 +353,25 @@
 
     const fieldElement = (field) => form.elements.namedItem(field.key);
 
+    const validateUTF8ByteLimit = (field) => {
+      const element = fieldElement(field);
+      if (!element || field.kind !== "password" || !field.max) return;
+      const byteLength = new TextEncoder().encode(element.value).length;
+      element.setCustomValidity(
+        byteLength > field.max
+          ? `${field.label} must be at most ${field.max} UTF-8 bytes.`
+          : "",
+      );
+    };
+
+    resource.fields.forEach((field) => {
+      if (field.kind !== "password" || !field.max) return;
+      const element = fieldElement(field);
+      if (element) {
+        element.addEventListener("input", () => validateUTF8ByteLimit(field));
+      }
+    });
+
     const setField = (field, value) => {
       const element = fieldElement(field);
       if (!element) return;
@@ -438,6 +457,7 @@
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       status.hidden = true;
+      resource.fields.forEach(validateUTF8ByteLimit);
       if (!form.reportValidity()) return;
       setBusy(submit, true, id ? "Saving…" : "Creating…");
       try {

@@ -80,7 +80,10 @@ type AdminOption struct {
 	Label string `json:"label"`
 }
 
-// AdminField describes one editable resource field.
+// AdminField describes one editable resource field. Min and Max are numeric
+// bounds for number fields and character-count bounds for text fields. For
+// password fields, Max is instead the UTF-8 byte ceiling required by the
+// password hasher.
 type AdminField struct {
 	Key              string         `json:"key"`
 	Label            string         `json:"label"`

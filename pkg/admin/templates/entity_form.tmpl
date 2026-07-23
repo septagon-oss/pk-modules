@@ -37,7 +37,7 @@
             {{if eq .Kind "slug"}}pattern="[a-z0-9]+(?:-[a-z0-9]+)*" autocapitalize="none" spellcheck="false"{{end}}
             {{if .Placeholder}}placeholder="{{.Placeholder}}"{{end}}
             {{if or .Required (and (not $.EntityID) .RequiredOnCreate)}}required{{end}} {{if .ReadOnly}}readonly{{end}}
-            {{if eq .Kind "number"}}{{if .Min}}min="{{.Min}}"{{end}} {{if .Max}}max="{{.Max}}"{{end}}{{else}}{{if .Min}}minlength="{{.Min}}"{{end}} {{if .Max}}maxlength="{{.Max}}"{{end}}{{end}}>
+            {{if eq .Kind "number"}}{{if .Min}}min="{{.Min}}"{{end}} {{if .Max}}max="{{.Max}}"{{end}}{{else if eq .Kind "password"}}{{if .Min}}minlength="{{.Min}}"{{end}} {{if .Max}}data-max-utf8-bytes="{{.Max}}"{{end}}{{else}}{{if .Min}}minlength="{{.Min}}"{{end}} {{if .Max}}maxlength="{{.Max}}"{{end}}{{end}}>
           {{end}}
           {{if .Help}}<small id="field-{{.Key}}-help">{{.Help}}</small>{{end}}
         </label>
