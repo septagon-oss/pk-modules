@@ -276,6 +276,7 @@ func TestAdminCSSCarriesResponsiveAndAccessibilityGuards(t *testing.T) {
 		"grid-template-columns: minmax(92px, .34fr) minmax(0, 1fr)",
 		".pk-row-actions .pk-table-action",
 		`content: "Exit"`,
+		"max-width: min(185px, calc(100vw - 200px))",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("responsive stylesheet missing %q", want)

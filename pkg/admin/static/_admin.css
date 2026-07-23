@@ -1383,7 +1383,7 @@ h3 {
 
 @media (max-width: 420px) {
   .pk-brand strong {
-    max-width: 135px;
+    max-width: min(185px, calc(100vw - 200px));
   }
 
   .pk-header-tools {
@@ -1395,6 +1395,7 @@ h3 {
     padding: 0;
     overflow: hidden;
     color: transparent;
+    font-size: 0;
   }
 
   .pk-icon-btn::before {
