@@ -65,7 +65,11 @@ func (input userRequest) user(tenantID, id string) User {
 
 func canSetPassword(r *http.Request) bool {
 	principal := identity.PrincipalFromContext(r.Context())
-	return principal.HasScope("admin") || principal.HasScope("users:write")
+	// Password mutation is an interactive-administrator capability, not
+	// ordinary user CRUD. The API-key module refuses to mint the reserved
+	// "admin" scope, so a users:write automation key cannot turn itself into
+	// an interactive administrator by replacing a login password.
+	return principal.HasScope("admin")
 }
 
 // RegisterRoutes mounts the handler under the canonical APIPath on the given
@@ -159,7 +163,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.Password != "" && !canSetPassword(r) {
-		http.Error(w, "forbidden: users:write scope required to set a password", http.StatusForbidden)
+		http.Error(w, "forbidden: admin scope required to set a password", http.StatusForbidden)
 		return
 	}
 	if err := validatePassword(input.Password); err != nil {
@@ -203,7 +207,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	if input.Password != "" && !canSetPassword(r) {
-		http.Error(w, "forbidden: users:write scope required to set a password", http.StatusForbidden)
+		http.Error(w, "forbidden: admin scope required to set a password", http.StatusForbidden)
 		return
 	}
 	if err := validatePassword(input.Password); err != nil {

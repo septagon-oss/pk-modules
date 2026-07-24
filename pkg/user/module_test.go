@@ -394,6 +394,73 @@ func TestHandlerRejectsPasswordWriteWithoutCapability(t *testing.T) {
 	}
 }
 
+func TestHandlerRejectsPasswordResetFromAPIKeyUserWriteScope(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	existing := &user.User{
+		TenantID:    "t-1",
+		Email:       "owner@example.test",
+		Username:    "owner",
+		DisplayName: "Owner Before",
+		Active:      true,
+	}
+	if err := m.Service().Create(ctx, existing); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := m.Service().SetPassword(ctx, "t-1", existing.ID, "owner-original-password"); err != nil {
+		t.Fatalf("SetPassword: %v", err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		user.APIPath+"/"+existing.ID,
+		strings.NewReader(`{
+			"email":"owner@example.test",
+			"username":"owner",
+			"display_name":"Owner After",
+			"password":"attacker-selected-password",
+			"active":true
+		}`),
+	)
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(), identity.Principal{
+		Subject:    existing.ID,
+		TenantID:   "t-1",
+		Scopes:     []string{"users:write"},
+		AuthMethod: "api_key",
+	}))
+	rec := httptest.NewRecorder()
+
+	m.HTTPHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("update status = %d, want 403; body = %s", rec.Code, rec.Body.String())
+	}
+	if err := m.Service().VerifyPassword(
+		ctx,
+		"t-1",
+		existing.ID,
+		"owner-original-password",
+	); err != nil {
+		t.Fatalf("original password no longer verifies: %v", err)
+	}
+	if err := m.Service().VerifyPassword(
+		ctx,
+		"t-1",
+		existing.ID,
+		"attacker-selected-password",
+	); !errors.Is(err, passhash.ErrMismatch) {
+		t.Fatalf("attacker-selected password error = %v, want ErrMismatch", err)
+	}
+	got, err := m.Service().Get(ctx, "t-1", existing.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DisplayName != "Owner Before" {
+		t.Fatalf("DisplayName = %q after rejected password reset, want Owner Before", got.DisplayName)
+	}
+}
+
 func TestHandlerRejectsTooLongPasswordBeforeUpdatingProfile(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
