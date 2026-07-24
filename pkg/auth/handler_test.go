@@ -105,6 +105,23 @@ func TestLoginHTTPValidCredentialsReturns201(t *testing.T) {
 	}
 }
 
+func TestLoginHTTPUnknownFieldReturns400(t *testing.T) {
+	t.Parallel()
+	m, _, _ := newModule(t)
+
+	rec := postLogin(
+		t,
+		m.HTTPHandler(),
+		`{"tenant_id":"t-1","email":"alice@example.test","password":"supersecret","extra_field":"typo"}`,
+	)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body=%q", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `unknown field "extra_field"`) {
+		t.Fatalf("body = %q, want actionable unknown-field error", rec.Body.String())
+	}
+}
+
 // TestLoginServiceMissingTenantIsInvalidRequest asserts the service-level
 // sentinel so callers (and the handler) can branch on it.
 func TestLoginServiceMissingTenantIsInvalidRequest(t *testing.T) {

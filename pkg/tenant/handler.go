@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 	"github.com/septagon-oss/pk-modules/pkg/tenant/store"
 )
 
@@ -157,8 +158,8 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	var t Tenant
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := portslib.DecodeJSONBody(r.Body, &t); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	t.ID = id

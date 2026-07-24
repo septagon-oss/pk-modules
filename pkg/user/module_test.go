@@ -12,6 +12,7 @@ package user_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -458,6 +459,107 @@ func TestHandlerRejectsPasswordResetFromAPIKeyUserWriteScope(t *testing.T) {
 	}
 	if got.DisplayName != "Owner Before" {
 		t.Fatalf("DisplayName = %q after rejected password reset, want Owner Before", got.DisplayName)
+	}
+}
+
+func TestHandlerPreservesActiveWhenUpdateOmitsIt(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	existing := &user.User{
+		TenantID: "t-1", Email: "active@example.test", Username: "active",
+		DisplayName: "Before", Active: true,
+	}
+	if err := m.Service().Create(ctx, existing); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPut,
+		user.APIPath+"/"+existing.ID,
+		strings.NewReader(`{
+			"email":"active@example.test",
+			"username":"active",
+			"display_name":"After"
+		}`),
+	)
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(), identity.Principal{
+		Subject: "operator", TenantID: "t-1", Scopes: []string{"admin"},
+	}))
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	got, err := m.Service().Get(ctx, "t-1", existing.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.Active || got.DisplayName != "After" {
+		t.Fatalf("updated user = active %v, display %q", got.Active, got.DisplayName)
+	}
+}
+
+func TestHandlerDefaultsNewUserToActive(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		user.APIPath,
+		strings.NewReader(`{"email":"default@example.test","username":"default"}`),
+	)
+	req = req.WithContext(identity.ContextWithPrincipal(req.Context(), identity.Principal{
+		Subject: "operator", TenantID: "t-1", Scopes: []string{"admin"},
+	}))
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	var created user.User
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created user: %v", err)
+	}
+	if !created.Active {
+		t.Fatal("created user defaulted to inactive")
+	}
+}
+
+func TestUsersWriteKeyCannotModifyOrDeleteItsOwner(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	owner := &user.User{
+		TenantID: "t-1", Email: "owner-lockout@example.test", Username: "owner-lockout",
+		Active: true,
+	}
+	if err := m.Service().Create(ctx, owner); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	principal := identity.Principal{
+		Subject: owner.ID, TenantID: "t-1", Scopes: []string{"users:write"}, AuthMethod: "api_key",
+	}
+	for _, request := range []*http.Request{
+		httptest.NewRequest(
+			http.MethodPut,
+			user.APIPath+"/"+owner.ID,
+			strings.NewReader(`{"email":"owner-lockout@example.test","username":"owner-lockout","active":false}`),
+		),
+		httptest.NewRequest(http.MethodDelete, user.APIPath+"/"+owner.ID, nil),
+	} {
+		request = request.WithContext(identity.ContextWithPrincipal(request.Context(), principal))
+		rec := httptest.NewRecorder()
+		m.HTTPHandler().ServeHTTP(rec, request)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s owner mutation = %d, want 403; body=%s", request.Method, rec.Code, rec.Body.String())
+		}
+	}
+	got, err := m.Service().Get(ctx, "t-1", owner.ID)
+	if err != nil {
+		t.Fatalf("owner disappeared: %v", err)
+	}
+	if !got.Active {
+		t.Fatal("users:write key deactivated its own credential owner")
 	}
 }
 

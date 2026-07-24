@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -69,6 +70,88 @@ func TestNotificationReadIsSelfOnly(t *testing.T) {
 	m.HTTPHandler().ServeHTTP(arec, anon)
 	if arec.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous notification read = %d, want 401", arec.Code)
+	}
+}
+
+func TestNotificationHTTPCreateOwnsIDAndTimestamps(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	mux := http.NewServeMux()
+	m.HTTPHandler().RegisterRoutes(mux)
+	principal := identity.Principal{
+		Subject: "u-alice", TenantID: "t-1", AuthMethod: "session",
+	}
+
+	before := time.Now().UTC()
+	notificationReq := httptest.NewRequest(
+		http.MethodPost,
+		notification.APIPath,
+		strings.NewReader(`{
+			"id":"attacker-notification",
+			"tenant_id":"t-evil",
+			"user_id":"u-bob",
+			"title":"Welcome",
+			"body":"Hello",
+			"emitted_at":"1999-01-01T00:00:00Z"
+		}`),
+	)
+	notificationReq = notificationReq.WithContext(
+		identity.ContextWithPrincipal(notificationReq.Context(), principal),
+	)
+	notificationRec := httptest.NewRecorder()
+	mux.ServeHTTP(notificationRec, notificationReq)
+	if notificationRec.Code != http.StatusCreated {
+		t.Fatalf("notification create = %d; body=%s", notificationRec.Code, notificationRec.Body.String())
+	}
+	var created portslib.Notification
+	if err := json.Unmarshal(notificationRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode notification: %v", err)
+	}
+	if created.ID == "attacker-notification" || created.ID == "" {
+		t.Fatalf("server-owned notification ID = %q", created.ID)
+	}
+	if created.TenantID != "t-1" || created.UserID != "u-alice" {
+		t.Fatalf("server-owned notification identity = tenant %q user %q", created.TenantID, created.UserID)
+	}
+	if created.EmittedAt.Before(before) {
+		t.Fatalf("server-owned emitted_at = %s, before request %s", created.EmittedAt, before)
+	}
+
+	subscriptionReq := httptest.NewRequest(
+		http.MethodPost,
+		notification.SubscriptionAPIPath,
+		strings.NewReader(`{
+			"id":"attacker-subscription",
+			"tenant_id":"t-evil",
+			"user_id":"u-bob",
+			"channel":"in_app",
+			"created_at":"1999-01-01T00:00:00Z"
+		}`),
+	)
+	subscriptionReq = subscriptionReq.WithContext(
+		identity.ContextWithPrincipal(subscriptionReq.Context(), principal),
+	)
+	subscriptionRec := httptest.NewRecorder()
+	mux.ServeHTTP(subscriptionRec, subscriptionReq)
+	if subscriptionRec.Code != http.StatusCreated {
+		t.Fatalf("subscription create = %d; body=%s", subscriptionRec.Code, subscriptionRec.Body.String())
+	}
+	var subscription notification.Subscription
+	if err := json.Unmarshal(subscriptionRec.Body.Bytes(), &subscription); err != nil {
+		t.Fatalf("decode subscription: %v", err)
+	}
+	if subscription.ID == "attacker-subscription" || subscription.ID == "" {
+		t.Fatalf("server-owned subscription ID = %q", subscription.ID)
+	}
+	if subscription.TenantID != "t-1" || subscription.UserID != "u-alice" {
+		t.Fatalf(
+			"server-owned subscription identity = tenant %q user %q",
+			subscription.TenantID,
+			subscription.UserID,
+		)
+	}
+	if subscription.CreatedAt.Before(before) {
+		t.Fatalf("server-owned created_at = %s, before request %s", subscription.CreatedAt, before)
 	}
 }
 

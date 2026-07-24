@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
@@ -116,8 +115,11 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	kind := q.Get("kind")
-	limit := parseIntDefault(q.Get("limit"), 0)
-	offset := parseIntDefault(q.Get("offset"), 0)
+	limit, offset, err := portslib.ParsePagination(q)
+	if err != nil {
+		http.Error(w, "invalid pagination: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	rows, err := h.svc.List(r.Context(), tenantID, kind, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -132,8 +134,8 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var c Content
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := portslib.DecodeJSONBody(r.Body, &c); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	// Server-owned fields come from the request identity / server, never the
@@ -169,8 +171,8 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 	var c Content
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := portslib.DecodeJSONBody(r.Body, &c); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	c.ID = id
@@ -233,15 +235,4 @@ func writeError(w http.ResponseWriter, err error) {
 	default:
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
-}
-
-func parseIntDefault(s string, def int) int {
-	if s == "" {
-		return def
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return def
-	}
-	return n
 }

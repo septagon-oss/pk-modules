@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,16 +40,52 @@ var reservedScopes = map[string]struct{}{
 	"console:access": {},
 }
 
-// service is the default APIKeyService implementation.
-type service struct {
-	store  store.Store
-	hasher passhash.Hasher
-	audit  audit.AuditEmitter
-	now    func() time.Time
+// defaultAllowedScopes is the machine-capability vocabulary implemented by the
+// nine OSS modules and the starter host. Applications add their own module
+// scopes with WithAllowedScopes.
+var defaultAllowedScopes = []string{
+	"api-keys:read",
+	"api-keys:write",
+	"audit:read",
+	"content:read",
+	"content:write",
+	"metrics:read",
+	"notifications:read",
+	"notifications:write",
+	"tenants:read",
+	"tenants:write",
+	"users:read",
+	"users:write",
 }
 
-func newService(s store.Store, h passhash.Hasher, emitter audit.AuditEmitter) *service {
-	return &service{store: s, hasher: h, audit: emitter, now: time.Now}
+// service is the default APIKeyService implementation.
+type service struct {
+	store             store.Store
+	hasher            passhash.Hasher
+	audit             audit.AuditEmitter
+	allowedScopes     map[string]struct{}
+	allowedScopeNames []string
+	now               func() time.Time
+}
+
+func newService(
+	s store.Store,
+	h passhash.Hasher,
+	emitter audit.AuditEmitter,
+	additionalScopes []string,
+) (*service, error) {
+	allowedScopes, allowedScopeNames, err := buildScopeCatalog(additionalScopes)
+	if err != nil {
+		return nil, err
+	}
+	return &service{
+		store:             s,
+		hasher:            h,
+		audit:             emitter,
+		allowedScopes:     allowedScopes,
+		allowedScopeNames: allowedScopeNames,
+		now:               time.Now,
+	}, nil
 }
 
 // Issue generates a new API key and persists its hash. The returned
@@ -76,7 +113,7 @@ func (s *service) Issue(
 	if name == "" {
 		return "", nil, errors.New("apikey: name is required")
 	}
-	scopesCopy, err := normalizeScopes(scopes)
+	scopesCopy, err := s.normalizeScopes(scopes)
 	if err != nil {
 		return "", nil, err
 	}
@@ -137,7 +174,33 @@ func (s *service) Issue(
 	return plaintext, out, nil
 }
 
-func normalizeScopes(scopes []string) ([]string, error) {
+func buildScopeCatalog(additionalScopes []string) (map[string]struct{}, []string, error) {
+	names := append([]string(nil), defaultAllowedScopes...)
+	names = append(names, additionalScopes...)
+	allowed := make(map[string]struct{}, len(names))
+	canonical := make([]string, 0, len(names))
+	for _, scope := range names {
+		scope = strings.TrimSpace(scope)
+		if scope == "" {
+			return nil, nil, errors.New("apikey: allowed scopes cannot contain an empty value")
+		}
+		if len(scope) > 100 {
+			return nil, nil, errors.New("apikey: each allowed scope must be at most 100 characters")
+		}
+		if _, reserved := reservedScopes[scope]; reserved {
+			return nil, nil, fmt.Errorf("apikey: scope %q is reserved for interactive authorization", scope)
+		}
+		if _, exists := allowed[scope]; exists {
+			continue
+		}
+		allowed[scope] = struct{}{}
+		canonical = append(canonical, scope)
+	}
+	slices.Sort(canonical)
+	return allowed, canonical, nil
+}
+
+func (s *service) normalizeScopes(scopes []string) ([]string, error) {
 	if len(scopes) > 50 {
 		return nil, errors.New("apikey: at most 50 scopes are allowed")
 	}
@@ -153,6 +216,13 @@ func normalizeScopes(scopes []string) ([]string, error) {
 		}
 		if _, reserved := reservedScopes[scope]; reserved {
 			return nil, fmt.Errorf("apikey: scope %q is reserved for interactive authorization", scope)
+		}
+		if _, allowed := s.allowedScopes[scope]; !allowed {
+			return nil, fmt.Errorf(
+				"apikey: unknown scope %q; allowed scopes: %s",
+				scope,
+				strings.Join(s.allowedScopeNames, ", "),
+			)
 		}
 		if seen[scope] {
 			continue

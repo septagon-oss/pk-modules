@@ -15,10 +15,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 	"github.com/septagon-oss/pk-modules/pkg/user/store"
 )
 
@@ -49,17 +49,17 @@ type userRequest struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	Password    string `json:"password"`
-	Active      bool   `json:"active"`
+	Active      *bool  `json:"active"`
 }
 
-func (input userRequest) user(tenantID, id string) User {
+func (input userRequest) user(tenantID, id string, active bool) User {
 	return User{
 		ID:          id,
 		TenantID:    tenantID,
 		Email:       input.Email,
 		Username:    input.Username,
 		DisplayName: input.DisplayName,
-		Active:      input.Active,
+		Active:      active,
 	}
 }
 
@@ -70,6 +70,11 @@ func canSetPassword(r *http.Request) bool {
 	// "admin" scope, so a users:write automation key cannot turn itself into
 	// an interactive administrator by replacing a login password.
 	return principal.HasScope("admin")
+}
+
+func canMutateUser(r *http.Request, id string) bool {
+	principal := identity.PrincipalFromContext(r.Context())
+	return principal.HasScope("admin") || principal.Subject != id
 }
 
 // RegisterRoutes mounts the handler under the canonical APIPath on the given
@@ -125,8 +130,11 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, offset, err := portslib.ParsePagination(r.URL.Query())
+	if err != nil {
+		http.Error(w, "invalid pagination: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	users, err := h.svc.List(r.Context(), tenant, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -158,8 +166,8 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input userRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := portslib.DecodeJSONBody(r.Body, &input); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if input.Password != "" && !canSetPassword(r) {
@@ -170,9 +178,13 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// The tenant is authoritative from the request identity; a body-supplied
-	// tenant_id is ignored so a caller cannot create users in another tenant.
-	u := input.user(tenant, "")
+	// The tenant is authoritative from the request identity. tenant_id is not
+	// part of the accepted request contract, so strict decoding rejects it.
+	active := true
+	if input.Active != nil {
+		active = *input.Active
+	}
+	u := input.user(tenant, "", active)
 	if err := h.svc.Create(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -201,9 +213,13 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 	if !ok {
 		return
 	}
+	if !canMutateUser(r, id) {
+		http.Error(w, "forbidden: admin scope required to modify the credential owner", http.StatusForbidden)
+		return
+	}
 	var input userRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := portslib.DecodeJSONBody(r.Body, &input); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	if input.Password != "" && !canSetPassword(r) {
@@ -214,7 +230,20 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	u := input.user(tenant, id)
+	existing, err := h.svc.Get(r.Context(), tenant, id)
+	if errors.Is(err, store.ErrNotFound) {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	active := existing.Active
+	if input.Active != nil {
+		active = *input.Active
+	}
+	u := input.user(tenant, id, active)
 	if err := h.svc.Update(r.Context(), &u); err != nil {
 		status := http.StatusInternalServerError
 		switch {
@@ -242,6 +271,10 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request, id string) {
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request, id string) {
 	tenant, ok := tenantOf(w, r)
 	if !ok {
+		return
+	}
+	if !canMutateUser(r, id) {
+		http.Error(w, "forbidden: admin scope required to modify the credential owner", http.StatusForbidden)
 		return
 	}
 	if err := h.svc.Delete(r.Context(), tenant, id); err != nil {

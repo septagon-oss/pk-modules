@@ -6,7 +6,6 @@ package apikey_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"maps"
@@ -122,7 +121,14 @@ func TestIssueProducesPlaintextAndStoresHash(t *testing.T) {
 	m := newModule(t)
 	ctx := context.Background()
 
-	plaintext, key, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", []string{"read", "write"}, 0)
+	plaintext, key, err := m.Service().Issue(
+		ctx,
+		"t-1",
+		"u-1",
+		"ci-bot",
+		[]string{"content:read", "content:write"},
+		0,
+	)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -138,7 +144,9 @@ func TestIssueProducesPlaintextAndStoresHash(t *testing.T) {
 	if key.Hash == plaintext {
 		t.Fatalf("Hash equals plaintext — bcrypt not applied")
 	}
-	if len(key.Scopes) != 2 || key.Scopes[0] != "read" || key.Scopes[1] != "write" {
+	if len(key.Scopes) != 2 ||
+		key.Scopes[0] != "content:read" ||
+		key.Scopes[1] != "content:write" {
 		t.Fatalf("Issue returned wrong scopes: %+v", key.Scopes)
 	}
 	if key.Prefix == "" || !strings.Contains(plaintext, key.Prefix) {
@@ -163,39 +171,63 @@ func TestIssueRejectsInteractiveReservedScopes(t *testing.T) {
 	}
 }
 
-// TestIssueIgnoresBodyIdentity is the v0.2.2 regression for the key-issuance
-// impersonation hole: the HTTP issue endpoint must bind the new key to the
-// authenticated principal, never to a body-supplied user_id/tenant_id. Alice
-// posts user_id=u-bob & tenant_id=t-evil; the minted key must belong to alice
-// in t-1.
-func TestIssueIgnoresBodyIdentity(t *testing.T) {
+func TestIssueRejectsUnknownScopeAndListsValidOptions(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	_, _, err := m.Service().Issue(
+		context.Background(),
+		"t-1",
+		"u-1",
+		"typo",
+		[]string{"content:reed"},
+		0,
+	)
+	if err == nil {
+		t.Fatal("Issue accepted an unknown scope")
+	}
+	if !strings.Contains(err.Error(), `unknown scope "content:reed"`) ||
+		!strings.Contains(err.Error(), "content:read") {
+		t.Fatalf("Issue error is not actionable: %v", err)
+	}
+}
+
+func TestIssueAcceptsExplicitApplicationScope(t *testing.T) {
+	t.Parallel()
+	m := newModule(t, apikey.WithAllowedScopes("widgets:read"))
+	_, key, err := m.Service().Issue(
+		context.Background(),
+		"t-1",
+		"u-1",
+		"widget-reader",
+		[]string{"widgets:read"},
+		0,
+	)
+	if err != nil {
+		t.Fatalf("Issue application scope: %v", err)
+	}
+	if len(key.Scopes) != 1 || key.Scopes[0] != "widgets:read" {
+		t.Fatalf("application scopes = %v", key.Scopes)
+	}
+}
+
+// TestIssueRejectsBodyIdentity is the key-issuance impersonation regression:
+// identity is not part of the input contract because the server binds every
+// key to the authenticated principal.
+func TestIssueRejectsBodyIdentity(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
 
-	body := strings.NewReader(`{"user_id":"u-bob","tenant_id":"t-evil","name":"k","scopes":["read"]}`)
+	body := strings.NewReader(`{"user_id":"u-bob","tenant_id":"t-evil","name":"k","scopes":["content:read"]}`)
 	req := httptest.NewRequest(http.MethodPost, apikey.APIPath, body)
 	req = req.WithContext(identity.ContextWithPrincipal(req.Context(),
 		identity.Principal{Subject: "u-alice", TenantID: "t-1", AuthMethod: "session"}))
 	rec := httptest.NewRecorder()
 	m.HTTPHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("issue = %d, want 201 (body=%s)", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("issue = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
 	}
-
-	var resp struct {
-		Key *apikey.APIKey `json:"key"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v (body=%s)", err, rec.Body.String())
-	}
-	if resp.Key == nil {
-		t.Fatalf("issue response missing key")
-	}
-	if resp.Key.UserID != "u-alice" {
-		t.Fatalf("key UserID = %q, want u-alice — body user_id was honored (impersonation)", resp.Key.UserID)
-	}
-	if resp.Key.TenantID != "t-1" {
-		t.Fatalf("key TenantID = %q, want t-1 — body tenant_id was honored", resp.Key.TenantID)
+	if !strings.Contains(rec.Body.String(), `unknown field "user_id"`) {
+		t.Fatalf("issue error = %q, want rejected body identity", rec.Body.String())
 	}
 }
 
@@ -216,7 +248,7 @@ func TestVerifyAcceptsCorrectKey(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
 	ctx := context.Background()
-	plaintext, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", []string{"read"}, 0)
+	plaintext, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", []string{"content:read"}, 0)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -357,7 +389,7 @@ func TestAuthenticatorMiddlewareSetsPrincipal(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
 	ctx := context.Background()
-	plaintext, _, err := m.Service().Issue(ctx, "t-1", "u-1", "ci", []string{"read"}, 0)
+	plaintext, _, err := m.Service().Issue(ctx, "t-1", "u-1", "ci", []string{"content:read"}, 0)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -386,8 +418,8 @@ func TestAuthenticatorMiddlewareSetsPrincipal(t *testing.T) {
 	if captured.AuthMethod != "api_key" {
 		t.Fatalf("AuthMethod = %q, want api_key", captured.AuthMethod)
 	}
-	if !captured.HasScope("read") {
-		t.Fatalf("HasScope(read) = false, want true: %+v", captured.Scopes)
+	if !captured.HasScope("content:read") {
+		t.Fatalf("HasScope(content:read) = false, want true: %+v", captured.Scopes)
 	}
 }
 
@@ -430,7 +462,7 @@ func TestIssueEmitsAuditEvent(t *testing.T) {
 	emitter := &fakeAuditEmitter{}
 	m := newModule(t, apikey.WithAuditEmitter(emitter))
 	ctx := context.Background()
-	_, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", []string{"read"}, 0)
+	_, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", []string{"content:read"}, 0)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}

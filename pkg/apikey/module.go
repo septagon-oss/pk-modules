@@ -96,7 +96,10 @@ func NewModule(opts ...Option) (*Module, error) {
 		hasher: cfg.hasher,
 		audit:  cfg.audit,
 	}
-	m.svc = newService(st, cfg.hasher, cfg.audit)
+	m.svc, err = newService(st, cfg.hasher, cfg.audit, cfg.allowedScopes)
+	if err != nil {
+		return nil, err
+	}
 	m.handler = NewHandler(m.svc)
 	m.authn = newAuthenticator(m.svc)
 
@@ -203,6 +206,12 @@ func (m *Module) Store() store.Store { return m.store }
 
 // Hasher returns the configured password hasher.
 func (m *Module) Hasher() passhash.Hasher { return m.hasher }
+
+// AllowedScopes returns the sorted machine-capability vocabulary accepted by
+// this module instance.
+func (m *Module) AllowedScopes() []string {
+	return append([]string(nil), m.svc.allowedScopeNames...)
+}
 
 // authenticator implements APIKeyAuthenticator over an APIKeyService.
 type authenticator struct {

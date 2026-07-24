@@ -21,13 +21,14 @@ import (
 type Option func(*config)
 
 type config struct {
-	store        store.Store
-	hasher       passhash.Hasher
-	audit        audit.AuditEmitter
-	admin        portslib.AdminRegistrar
-	health       portslib.HealthRegistrar
-	sqliteDSN    string
-	sqliteDriver string
+	store         store.Store
+	hasher        passhash.Hasher
+	audit         audit.AuditEmitter
+	admin         portslib.AdminRegistrar
+	health        portslib.HealthRegistrar
+	allowedScopes []string
+	sqliteDSN     string
+	sqliteDriver  string
 }
 
 // WithStore wires a caller-provided store implementation.
@@ -55,6 +56,14 @@ func WithAdminRegistrar(r portslib.AdminRegistrar) Option {
 // WithHealthRegistrar wires the host application's health registrar.
 func WithHealthRegistrar(r portslib.HealthRegistrar) Option {
 	return func(c *config) { c.health = r }
+}
+
+// WithAllowedScopes adds application-owned machine capabilities to the
+// built-in scope catalog. API-key issuance rejects every scope that is neither
+// built in nor explicitly declared through this option, so typos fail loudly
+// while downstream modules remain extensible.
+func WithAllowedScopes(scopes ...string) Option {
+	return func(c *config) { c.allowedScopes = append(c.allowedScopes, scopes...) }
 }
 
 // WithSQLiteDSN selects the default sqlite store using the caller-registered

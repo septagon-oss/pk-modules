@@ -14,11 +14,13 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/auth/store"
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
 
 // Handler exposes the auth session HTTP surface.
@@ -72,8 +74,8 @@ type loginRequest struct {
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := portslib.DecodeJSONBody(r.Body, &req); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	sess, err := h.svc.Login(r.Context(), req.TenantID, Credentials{
@@ -97,6 +99,9 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrPolicyDenied):
 			status = http.StatusTooManyRequests
 			msg = err.Error()
+		}
+		if status == http.StatusInternalServerError {
+			slog.ErrorContext(r.Context(), "authentication login failed", "error", err)
 		}
 		http.Error(w, msg, status)
 		return

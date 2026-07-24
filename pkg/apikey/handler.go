@@ -80,8 +80,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type issueRequest struct {
-	TenantID  string   `json:"tenant_id"`
-	UserID    string   `json:"user_id"`
 	Name      string   `json:"name"`
 	Scopes    []string `json:"scopes"`
 	TTLSecond int64    `json:"ttl_seconds"`
@@ -98,15 +96,14 @@ func (h *Handler) issue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req issueRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := portslib.DecodeJSONBody(r.Body, &req); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Tenant AND user are authoritative from the request identity. A key is
-	// issued to the caller only: a body-supplied user_id (or tenant_id) is
-	// ignored, so a caller cannot mint a key that impersonates another user or
-	// another tenant. Issuing on behalf of a different user is a privileged
-	// operation not exposed by the OSS surface.
+	// Tenant AND user are authoritative from the request identity. tenant_id
+	// and user_id are not accepted request fields, so a caller cannot mint a
+	// key that impersonates another user or tenant. Issuing on behalf of a
+	// different user is a privileged operation not exposed by the OSS surface.
 	ttl := time.Duration(req.TTLSecond) * time.Second
 	plaintext, key, err := h.svc.Issue(r.Context(), tenant, subject, req.Name, req.Scopes, ttl)
 	if err != nil {

@@ -13,8 +13,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/septagon-oss/pk-modules/pkg/notification/store"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
@@ -56,8 +56,11 @@ func (h *Handler) serveNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		limit := parseIntDefault(r.URL.Query().Get("limit"), 0)
-		offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+		limit, offset, err := portslib.ParsePagination(r.URL.Query())
+		if err != nil {
+			http.Error(w, "invalid pagination: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		got, err := h.svc.GetByUser(r.Context(), tenant, subject, limit, offset)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -66,12 +69,14 @@ func (h *Handler) serveNotifications(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, got)
 	case http.MethodPost:
 		var n portslib.Notification
-		if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+		if err := portslib.DecodeJSONBody(r.Body, &n); err != nil {
+			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 			return
 		}
+		n.ID = ""
 		n.TenantID = tenant
 		n.UserID = subject
+		n.EmittedAt = time.Time{}
 		if err := h.svc.Create(r.Context(), &n); err != nil {
 			writeError(w, err)
 			return
@@ -120,14 +125,16 @@ func (h *Handler) serveSubscriptions(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		var sub Subscription
-		if err := json.NewDecoder(r.Body).Decode(&sub); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+		if err := portslib.DecodeJSONBody(r.Body, &sub); err != nil {
+			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		// Tenant and user are authoritative from the identity: a caller
 		// subscribes itself, never another user.
+		sub.ID = ""
 		sub.TenantID = tenant
 		sub.UserID = subject
+		sub.CreatedAt = time.Time{}
 		if err := h.svc.Subscribe(r.Context(), &sub); err != nil {
 			writeError(w, err)
 			return
@@ -171,15 +178,4 @@ func writeError(w http.ResponseWriter, err error) {
 	default:
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
-}
-
-func parseIntDefault(s string, def int) int {
-	if s == "" {
-		return def
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return def
-	}
-	return n
 }

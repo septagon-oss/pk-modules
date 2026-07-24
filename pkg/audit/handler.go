@@ -14,11 +14,11 @@ package audit
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
 
 // tenantOf returns the tenant the request is authorized to act in, taken from
@@ -95,26 +95,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		}
 		filter.Until = t
 	}
-	if v := q.Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			http.Error(w, "invalid limit: must be a positive integer", http.StatusBadRequest)
-			return
-		}
-		if n < 0 {
-			http.Error(w, "invalid limit: must be a positive integer", http.StatusBadRequest)
-			return
-		}
-		filter.Limit = n
+	limit, offset, err := portslib.ParsePagination(q)
+	if err != nil {
+		http.Error(w, "invalid pagination: "+err.Error(), http.StatusBadRequest)
+		return
 	}
-	if v := q.Get("offset"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			http.Error(w, "invalid offset: must be a non-negative integer", http.StatusBadRequest)
-			return
-		}
-		filter.Offset = n
-	}
+	filter.Limit = limit
+	filter.Offset = offset
 	events, err := h.reader.Query(r.Context(), filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

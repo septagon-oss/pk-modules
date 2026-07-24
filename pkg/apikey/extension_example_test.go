@@ -44,6 +44,7 @@ func TestProEmbeddingCompiles(t *testing.T) {
 	pro, err := NewProAPIKeyModule(
 		apikey.WithSQLiteDSN(dsn),
 		apikey.WithHasher(fastHasher(t)),
+		apikey.WithAllowedScopes("extension:read"),
 	)
 	if err != nil {
 		t.Fatalf("NewProAPIKeyModule: %v", err)
@@ -53,7 +54,7 @@ func TestProEmbeddingCompiles(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	plaintext, key, err := pro.Service().Issue(ctx, "t-pro", "u-pro", "ci", []string{"read"}, 0)
+	plaintext, key, err := pro.Service().Issue(ctx, "t-pro", "u-pro", "ci", []string{"extension:read"}, 0)
 	if err != nil {
 		t.Fatalf("pro.Service().Issue: %v", err)
 	}
