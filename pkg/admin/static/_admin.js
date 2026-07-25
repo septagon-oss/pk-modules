@@ -11,6 +11,20 @@
     return JSON.parse(new TextDecoder().decode(bytes));
   };
 
+  // The API addresses an entity by one canonical opaque segment: "id-" followed
+  // by the lowercase hex of the identifier's UTF-8 bytes. This mirrors
+  // pathsegment.EncodeOpaqueID on the server, and it is NOT interchangeable with
+  // encodeURIComponent — percent escapes are rejected. Links into this console's
+  // own pages keep using encodeURIComponent, because the admin shell parses its
+  // own paths and is not the API.
+  const apiSegment = (id) => {
+    let hex = "";
+    for (const byte of new TextEncoder().encode(String(id))) {
+      hex += byte.toString(16).padStart(2, "0");
+    }
+    return `id-${hex}`;
+  };
+
   const resource = decodeConfig(page.dataset.resourceConfig);
   const listPath = page.dataset.listPath;
 
@@ -174,7 +188,7 @@
       setBusy(button, true, "Working…");
       try {
         await request(
-          `${resource.api_path}/${encodeURIComponent(id)}${action.path_suffix}`,
+          `${resource.api_path}/${apiSegment(id)}${action.path_suffix}`,
           { method: action.method || "POST" },
         );
         notify(`${action.label} completed.`);
@@ -193,7 +207,7 @@
       if (!window.confirm(`Delete this ${resource.singular_label}? This cannot be undone.`)) return;
       setBusy(button, true, "Deleting…");
       try {
-        await request(`${resource.api_path}/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await request(`${resource.api_path}/${apiSegment(id)}`, { method: "DELETE" });
         notify(`${resource.singular_label} deleted.`);
         await load();
       } catch (error) {
@@ -420,7 +434,7 @@
       if (!id) return;
       setBusy(submit, true, "Loading…");
       try {
-        const row = await request(`${resource.api_path}/${encodeURIComponent(id)}`);
+        const row = await request(`${resource.api_path}/${apiSegment(id)}`);
         resource.fields.forEach((field) => setField(field, valueAt(row, field.key)));
       } catch (error) {
         showError(error.message);
@@ -462,7 +476,7 @@
       setBusy(submit, true, id ? "Saving…" : "Creating…");
       try {
         const response = await request(
-          id ? `${resource.api_path}/${encodeURIComponent(id)}` : resource.api_path,
+          id ? `${resource.api_path}/${apiSegment(id)}` : resource.api_path,
           {
             method: id ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },

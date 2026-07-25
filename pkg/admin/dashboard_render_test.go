@@ -74,3 +74,53 @@ func TestDashboardRendersTokenDrivenUI(t *testing.T) {
 		}
 	}
 }
+
+// The console is client-rendered: it reads entity ids out of JSON list
+// responses and builds API URLs in the browser. That coupling is invisible to
+// Go tooling, and it is exactly how a shipped release once left the console able
+// to list entities but unable to open, edit, or delete one — the script still
+// addressed the API with encodeURIComponent after the server began requiring the
+// canonical opaque segment.
+//
+// This pins the two halves together: the script must address the API with the
+// same encoding pathsegment produces, and must keep using encodeURIComponent for
+// links into the console's own pages, which the admin shell parses itself.
+func TestAdminScriptAddressesTheAPIWithCanonicalSegments(t *testing.T) {
+	t.Parallel()
+
+	m := newModule(t)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/static/_admin.js", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /admin/static/_admin.js = %d", rec.Code)
+	}
+	script := rec.Body.String()
+
+	if strings.Contains(script, "${resource.api_path}/${encodeURIComponent(") {
+		t.Error("script addresses the API with encodeURIComponent; the API requires the canonical opaque segment, which rejects percent escapes")
+	}
+	if !strings.Contains(script, "${resource.api_path}/${apiSegment(") {
+		t.Error("script no longer addresses the API through apiSegment")
+	}
+	if !strings.Contains(script, "encodeURIComponent(id)") {
+		t.Error("links into the console's own pages should still use encodeURIComponent; the admin shell parses those paths itself")
+	}
+
+	// The encoder must agree with the server byte for byte.
+	want, ok := portslib.EncodeEntityID("héllo/world")
+	if !ok {
+		t.Fatal("EncodeEntityID refused a legitimate id")
+	}
+	if !strings.HasPrefix(want, "id-") {
+		t.Fatalf("unexpected canonical form %q", want)
+	}
+	for _, fragment := range []string{
+		`return ` + "`id-${hex}`",
+		"new TextEncoder().encode(String(id))",
+		`byte.toString(16).padStart(2, "0")`,
+	} {
+		if !strings.Contains(script, fragment) {
+			t.Errorf("apiSegment must produce %s; missing %q", want[:3]+"<lowercase hex of the id's UTF-8 bytes>", fragment)
+		}
+	}
+}
