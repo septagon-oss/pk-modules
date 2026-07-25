@@ -33,9 +33,15 @@ func TestReleaseAndPortContractVersionsAreIndependent(t *testing.T) {
 		tenant.ModuleID:       tenant.ReleaseVersion,
 		user.ModuleID:         user.ReleaseVersion,
 	}
+	// Every module publishes the single-sourced release line. The value
+	// itself is asserted once, here, so a contract bump is a two-line diff:
+	// portslib.ReleaseVersion and this expectation.
+	if portslib.ReleaseVersion != "0.6.0" {
+		t.Errorf("portslib.ReleaseVersion = %q, want 0.6.0", portslib.ReleaseVersion)
+	}
 	for moduleID, version := range releases {
-		if version != "0.4.0" {
-			t.Errorf("%s release version = %q, want 0.4.0", moduleID, version)
+		if version != portslib.ReleaseVersion {
+			t.Errorf("%s release version = %q, want portslib.ReleaseVersion %q", moduleID, version, portslib.ReleaseVersion)
 		}
 	}
 

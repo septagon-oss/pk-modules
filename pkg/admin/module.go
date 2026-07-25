@@ -27,7 +27,7 @@ const (
 	ModuleName        = "Admin Management"
 	ModuleDescription = "Pluggable admin shell that hosts the registered pages of other modules."
 	ModuleVersion     = portslib.AdminRegistrarContractVersion
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // Module is the admin_management plugin. It implements portslib.AdminRegistrar

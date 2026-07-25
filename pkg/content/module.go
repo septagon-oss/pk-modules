@@ -37,7 +37,7 @@ const (
 	ModuleName        = "Content Management"
 	ModuleDescription = "Tenant-scoped pages, posts, and snippets with markdown/HTML bodies."
 	ModuleVersion     = "0.0.0"
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // defaultSQLiteDriver matches modernc.org/sqlite's default registration name.

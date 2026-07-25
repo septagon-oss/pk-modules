@@ -30,7 +30,7 @@ const (
 	ModuleName        = "Health Management"
 	ModuleDescription = "Aggregates module health checks and serves /healthz."
 	ModuleVersion     = "0.0.0"
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // Module is the OSS health_management module. Pro embeds *Module and adds

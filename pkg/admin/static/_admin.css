@@ -5,9 +5,9 @@
  */
 
 :root {
-  --pk-font-body: "IBM Plex Sans", Aptos, "Helvetica Neue", sans-serif;
-  --pk-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --pk-font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  /* --pk-font-* arrive from the design-token block served ahead of this
+     stylesheet (pk-design themes.Default()); only shell-chrome constants
+     that are not design tokens remain here. */
   --pk-header-height: 72px;
   --pk-sidebar-width: 264px;
   --pk-ease: cubic-bezier(.22, 1, .36, 1);

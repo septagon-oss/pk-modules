@@ -37,7 +37,7 @@ const (
 	ModuleName        = "User Management"
 	ModuleDescription = "Tenant-scoped user CRUD with pluggable password hashing."
 	ModuleVersion     = "0.0.0"
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // defaultSQLiteDriver is the driver name pk-modules expects callers to have

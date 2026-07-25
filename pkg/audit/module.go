@@ -36,7 +36,7 @@ const (
 	ModuleName        = "Audit Management"
 	ModuleDescription = "Append-only tenant-scoped audit event log."
 	ModuleVersion     = "0.0.0"
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // defaultSQLiteDriver is the driver name pk-modules expects callers to have

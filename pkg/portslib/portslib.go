@@ -159,6 +159,13 @@ type AdminResource struct {
 	SuccessField  string             `json:"success_field,omitempty"`
 }
 
+// ReleaseVersion is the API contract version of the reference module set. It
+// appears in every module's registered metadata, in the starter's OpenAPI
+// document, and in the boot banner, and the conformance tests in pk-apps pin
+// those surfaces to it. Bump it here — one line — when a release changes the
+// public API contract, as the v0.5.0 opaque-identifier change did.
+const ReleaseVersion = "0.6.0"
+
 // AdminRegistrarContractVersion is the compatibility version of
 // AdminRegistrar. The schema-aware RegisterResource API replaced the v0.3
 // RegisterEntityCRUD API and therefore starts a new contract line in v0.4.

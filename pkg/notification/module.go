@@ -38,7 +38,7 @@ const (
 	ModuleName        = "Notification Management"
 	ModuleDescription = "In-app notifications with pluggable channels and per-user subscriptions."
 	ModuleVersion     = "0.0.0"
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // defaultSQLiteDriver matches modernc.org/sqlite's default registration name.

@@ -39,7 +39,7 @@ const (
 	ModuleName        = "Auth Management"
 	ModuleDescription = "Session-cookie login flow on top of user_management."
 	ModuleVersion     = "0.0.0"
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // defaultSQLiteDriver matches modernc.org/sqlite's default registration name.

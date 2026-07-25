@@ -34,7 +34,7 @@ const (
 	ModuleName        = "Tenant Management"
 	ModuleDescription = "Tenant CRUD, tenant context propagation, and isolation contracts."
 	ModuleVersion     = "0.0.0"
-	ReleaseVersion    = "0.4.0"
+	ReleaseVersion    = portslib.ReleaseVersion
 )
 
 // defaultSQLiteDriver is the driver name pk-modules expects callers to have
