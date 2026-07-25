@@ -86,7 +86,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // ServeHTTP dispatches to the appropriate handler method.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, APIPath), "/")
+	id, _, err := portslib.EntityIDFromPath(r.URL.Path, APIPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	// Reject IDs that still contain a slash — those are nested paths the
 	// handler does not own. Without this guard a request like
 	// /api/v1/users/a/b would resolve to id="a/b" and be served as a

@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/septagon-oss/pk-modules/pkg/notification/store"
@@ -92,12 +91,10 @@ func (h *Handler) serveNotificationItem(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	path := strings.TrimPrefix(r.URL.Path, APIPath+"/")
-	parts := strings.SplitN(path, "/", 2)
-	id := parts[0]
-	verb := ""
-	if len(parts) == 2 {
-		verb = parts[1]
+	id, verb, err := portslib.EntityIDFromPath(r.URL.Path, APIPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	switch verb {
 	case "read":
@@ -150,7 +147,11 @@ func (h *Handler) serveSubscriptionItem(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	id := strings.TrimPrefix(r.URL.Path, SubscriptionAPIPath+"/")
+	id, _, err := portslib.EntityIDFromPath(r.URL.Path, SubscriptionAPIPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if r.Method != http.MethodDelete {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

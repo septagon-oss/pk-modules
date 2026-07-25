@@ -177,7 +177,7 @@ func TestNotificationMarkReadIsSelfOnly(t *testing.T) {
 	mux := http.NewServeMux()
 	m.HTTPHandler().RegisterRoutes(mux)
 	markRead := func(subject string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, notification.APIPath+"/"+bob.ID+"/read", nil)
+		req := httptest.NewRequest(http.MethodPost, notification.APIPath+"/"+encodeID(t, bob.ID)+"/read", nil)
 		req = req.WithContext(identity.ContextWithPrincipal(req.Context(),
 			identity.Principal{Subject: subject, TenantID: "t-1", AuthMethod: "session"}))
 		rec := httptest.NewRecorder()
@@ -460,4 +460,15 @@ func TestCompose(t *testing.T) {
 	if _, err := pkmodule.Compose(catalog); err != nil {
 		t.Fatalf("Compose catalog: %v", err)
 	}
+}
+
+// encodeID renders an entity id as the canonical opaque path segment the
+// handlers require, which is the same form pk-client puts on the wire.
+func encodeID(t *testing.T, id string) string {
+	t.Helper()
+	segment, ok := portslib.EncodeEntityID(id)
+	if !ok {
+		t.Fatalf("encode entity id %q", id)
+	}
+	return segment
 }

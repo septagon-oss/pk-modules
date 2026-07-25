@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
+
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-modules/pkg/tenant"
@@ -93,16 +95,16 @@ func TestHandlerSelfOnlyBoundary(t *testing.T) {
 		return rec
 	}
 
-	if rec := do(http.MethodGet, "/api/v1/tenants/t-self", "t-self"); rec.Code != http.StatusOK {
+	if rec := do(http.MethodGet, "/api/v1/tenants/"+encodeID(t, "t-self"), "t-self"); rec.Code != http.StatusOK {
 		t.Fatalf("GET own tenant = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if rec := do(http.MethodGet, "/api/v1/tenants/t-other", "t-self"); rec.Code != http.StatusNotFound {
+	if rec := do(http.MethodGet, "/api/v1/tenants/"+encodeID(t, "t-other"), "t-self"); rec.Code != http.StatusNotFound {
 		t.Fatalf("GET another tenant = %d, want 404 (cross-tenant read must be denied)", rec.Code)
 	}
-	if rec := do(http.MethodDelete, "/api/v1/tenants/t-other", "t-self"); rec.Code != http.StatusNotFound {
+	if rec := do(http.MethodDelete, "/api/v1/tenants/"+encodeID(t, "t-other"), "t-self"); rec.Code != http.StatusNotFound {
 		t.Fatalf("DELETE another tenant = %d, want 404", rec.Code)
 	}
-	if rec := do(http.MethodGet, "/api/v1/tenants/t-self", ""); rec.Code != http.StatusUnauthorized {
+	if rec := do(http.MethodGet, "/api/v1/tenants/"+encodeID(t, "t-self"), ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous GET = %d, want 401", rec.Code)
 	}
 	if rec := do(http.MethodPost, "/api/v1/tenants", "t-self"); rec.Code != http.StatusForbidden {
@@ -116,8 +118,11 @@ func TestHandlerRejectsIDWithSlash(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/tenants/a/b", nil)
 	rec := httptest.NewRecorder()
 	m.HTTPHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404; body=%s", rec.Code, rec.Body.String())
+	// An id is one canonical opaque segment, so "a/b" cannot name an entity at
+	// all. That is a malformed request, not a missing one: 404 would imply the
+	// identifier was well formed and simply absent.
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -353,4 +358,15 @@ func TestEntityValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// encodeID renders an entity id as the canonical opaque path segment the
+// handlers require, which is the same form pk-client puts on the wire.
+func encodeID(t *testing.T, id string) string {
+	t.Helper()
+	segment, ok := portslib.EncodeEntityID(id)
+	if !ok {
+		t.Fatalf("encode entity id %q", id)
+	}
+	return segment
 }

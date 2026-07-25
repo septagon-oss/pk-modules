@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 	"time"
 
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
@@ -364,7 +366,7 @@ func TestSessionHandlerSelfOwnership(t *testing.T) {
 	}
 
 	do := func(method, subject string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(method, auth.APIPath+"/"+victim.ID, nil)
+		req := httptest.NewRequest(method, auth.APIPath+"/"+encodeID(t, victim.ID), nil)
 		if subject != "" {
 			req = req.WithContext(identity.ContextWithPrincipal(req.Context(),
 				identity.Principal{Subject: subject, TenantID: "t-1", AuthMethod: "session"}))
@@ -609,4 +611,15 @@ func TestComposeViaCatalog(t *testing.T) {
 	if _, err := pkmodule.Compose(catalog); err != nil {
 		t.Fatalf("Compose catalog: %v", err)
 	}
+}
+
+// encodeID renders an entity id as the canonical opaque path segment the
+// handlers require, which is the same form pk-client puts on the wire.
+func encodeID(t *testing.T, id string) string {
+	t.Helper()
+	segment, ok := portslib.EncodeEntityID(id)
+	if !ok {
+		t.Fatalf("encode entity id %q", id)
+	}
+	return segment
 }

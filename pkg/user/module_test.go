@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
+
 	pkmodule "github.com/septagon-oss/pk-core/pkg/module"
 	"github.com/septagon-oss/pk-core/pkg/security/identity"
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
@@ -179,8 +181,11 @@ func TestHandlerRejectsIDWithSlash(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/a/b", nil)
 	rec := httptest.NewRecorder()
 	m.HTTPHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404; body=%s", rec.Code, rec.Body.String())
+	// An id is one canonical opaque segment, so "a/b" cannot name an entity at
+	// all. That is a malformed request, not a missing one: 404 would imply the
+	// identifier was well formed and simply absent.
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -415,7 +420,7 @@ func TestHandlerRejectsPasswordResetFromAPIKeyUserWriteScope(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPut,
-		user.APIPath+"/"+existing.ID,
+		user.APIPath+"/"+encodeID(t, existing.ID),
 		strings.NewReader(`{
 			"email":"owner@example.test",
 			"username":"owner",
@@ -476,7 +481,7 @@ func TestHandlerPreservesActiveWhenUpdateOmitsIt(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodPut,
-		user.APIPath+"/"+existing.ID,
+		user.APIPath+"/"+encodeID(t, existing.ID),
 		strings.NewReader(`{
 			"email":"active@example.test",
 			"username":"active",
@@ -542,10 +547,10 @@ func TestUsersWriteKeyCannotModifyOrDeleteItsOwner(t *testing.T) {
 	for _, request := range []*http.Request{
 		httptest.NewRequest(
 			http.MethodPut,
-			user.APIPath+"/"+owner.ID,
+			user.APIPath+"/"+encodeID(t, owner.ID),
 			strings.NewReader(`{"email":"owner-lockout@example.test","username":"owner-lockout","active":false}`),
 		),
-		httptest.NewRequest(http.MethodDelete, user.APIPath+"/"+owner.ID, nil),
+		httptest.NewRequest(http.MethodDelete, user.APIPath+"/"+encodeID(t, owner.ID), nil),
 	} {
 		request = request.WithContext(identity.ContextWithPrincipal(request.Context(), principal))
 		rec := httptest.NewRecorder()
@@ -581,7 +586,7 @@ func TestHandlerRejectsTooLongPasswordBeforeUpdatingProfile(t *testing.T) {
 		"password":"` + strings.Repeat("x", user.MaxPasswordBytes+1) + `",
 		"active":true
 	}`
-	req := httptest.NewRequest(http.MethodPut, user.APIPath+"/"+existing.ID, strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, user.APIPath+"/"+encodeID(t, existing.ID), strings.NewReader(body))
 	req = req.WithContext(identity.ContextWithPrincipal(req.Context(), identity.Principal{
 		Subject: "operator", TenantID: "t-1", Scopes: []string{"admin"},
 	}))
@@ -733,4 +738,15 @@ func TestEntityValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// encodeID renders an entity id as the canonical opaque path segment the
+// handlers require, which is the same form pk-client puts on the wire.
+func encodeID(t *testing.T, id string) string {
+	t.Helper()
+	segment, ok := portslib.EncodeEntityID(id)
+	if !ok {
+		t.Fatalf("encode entity id %q", id)
+	}
+	return segment
 }

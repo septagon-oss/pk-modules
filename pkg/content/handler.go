@@ -56,10 +56,14 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // ServeHTTP dispatches to the appropriate handler method.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, APIPath)
-	path = strings.TrimPrefix(path, "/")
+	// The path is the collection, "<id>", or "<id>/<verb>".
+	id, verb, err := portslib.EntityIDFromPath(r.URL.Path, APIPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	if path == "" {
+	if id == "" {
 		switch r.Method {
 		case http.MethodGet:
 			h.list(w, r)
@@ -69,14 +73,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
-	}
-
-	// path is "<id>" or "<id>/<verb>"
-	parts := strings.SplitN(path, "/", 2)
-	id := parts[0]
-	verb := ""
-	if len(parts) == 2 {
-		verb = parts[1]
 	}
 
 	switch verb {

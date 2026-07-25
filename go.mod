@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/septagon-oss/pk-core v0.1.0
 	github.com/septagon-oss/pk-design v0.1.0
+	github.com/septagon-oss/pk-shared v0.1.1-0.20260721224051-81b52d89ad98
 	modernc.org/sqlite v1.50.1
 )
 
