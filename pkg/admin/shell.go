@@ -78,8 +78,11 @@ func composeCSS() []byte {
 	if err != nil {
 		rules = nil
 	}
-	out := make([]byte, 0, len(rules)+256)
+	utilities := adminUtilityCSS()
+	out := make([]byte, 0, len(rules)+len(utilities)+256)
 	out = append(out, adminTokenCSS()...)
+	out = append(out, '\n')
+	out = append(out, utilities...)
 	out = append(out, '\n')
 	out = append(out, rules...)
 	return out
