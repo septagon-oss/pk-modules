@@ -281,6 +281,13 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request, id string) {
 		http.Error(w, "forbidden: admin scope required to modify the credential owner", http.StatusForbidden)
 		return
 	}
+	// Deleting the account you are authenticated as destroys the identity
+	// behind the in-flight credential. Refuse it: another administrator (or a
+	// platform operation) removes an operator's account.
+	if principal := identity.PrincipalFromContext(r.Context()); principal.Subject == id {
+		http.Error(w, "conflict: a user cannot delete their own account", http.StatusConflict)
+		return
+	}
 	if err := h.svc.Delete(r.Context(), tenant, id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "user not found", http.StatusNotFound)

@@ -12,6 +12,7 @@ package user_test
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -749,4 +750,30 @@ func encodeID(t *testing.T, id string) string {
 		t.Fatalf("encode entity id %q", id)
 	}
 	return segment
+}
+
+func TestDeleteRejectsSelfDeletion(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+	u := &user.User{ID: "u-self", TenantID: "t-1", Email: "self@example.test", Username: "self", Active: true}
+	if err := m.Service().Create(ctx, u); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, user.APIPath+"/id-"+hex.EncodeToString([]byte("u-self")), nil)
+	req = req.WithContext(identity.ContextWithPrincipal(ctx, identity.Principal{
+		Subject: "u-self", TenantID: "t-1", Scopes: []string{"admin"},
+	}))
+	rec := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	m.HTTPHandler().RegisterRoutes(mux)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("self-delete status = %d, want 409", rec.Code)
+	}
+	if _, err := m.Service().Get(ctx, "t-1", "u-self"); err != nil {
+		t.Fatalf("user was deleted despite the self-delete guard: %v", err)
+	}
 }
