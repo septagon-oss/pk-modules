@@ -25,6 +25,26 @@
     return `id-${hex}`;
   };
 
+  // The Go views embed the design system's compiled class lists as JSON
+  // (id "pk-classnames"), so elements built here wear the SAME classes the
+  // server renders — declared once, in Go. Legacy pk-* names remain as the
+  // fallback so the script still works against an older shell.
+  const classNames = (() => {
+    try {
+      return JSON.parse(document.getElementById("pk-classnames")?.textContent || "{}");
+    } catch (_) {
+      return {};
+    }
+  })();
+  const cls = (key, fallback) => classNames[key] || fallback;
+  // Status values map onto pill tones; anything unrecognized stays neutral.
+  const statusTone = (normalized) => {
+    if (/^(ok|active|published|ready|healthy|enabled|sent)$/.test(normalized)) return cls("statusPositive", "");
+    if (/^(draft|pending|queued|paused|trial)$/.test(normalized)) return cls("statusWarning", "");
+    if (/^(error|failed|revoked|closed|disabled|expired|archived)$/.test(normalized)) return cls("statusDanger", "");
+    return cls("statusNeutral", "");
+  };
+
   const resource = decodeConfig(page.dataset.resourceConfig);
   const listPath = page.dataset.listPath;
 
@@ -122,17 +142,17 @@
     if (column.kind === "status" && value) {
       const pill = document.createElement("span");
       const normalized = String(value).toLowerCase();
-      pill.className = `pk-status pk-status-${normalized.replace(/[^a-z0-9]+/g, "-")}`;
+      pill.className = `${cls("statusPill", "pk-status")} ${statusTone(normalized)} pk-status-${normalized.replace(/[^a-z0-9]+/g, "-")}`.trim();
       pill.textContent = String(value);
       cell.appendChild(pill);
       return;
     }
     if (column.kind === "tags" && Array.isArray(value)) {
       const group = document.createElement("span");
-      group.className = "pk-tag-list";
+      group.className = cls("tagList", "pk-tag-list");
       value.forEach((item) => {
         const tag = document.createElement("span");
-        tag.className = "pk-tag";
+        tag.className = cls("tag", "pk-tag");
         tag.textContent = item;
         group.appendChild(tag);
       });
@@ -140,7 +160,7 @@
       return;
     }
     cell.textContent = textValue(value, column.kind);
-    if (column.primary) cell.classList.add("pk-primary-cell");
+    if (column.primary) cell.className += " " + cls("primaryCell", "pk-primary-cell");
   };
 
   const setBusy = (button, busy, busyLabel) => {
@@ -195,7 +215,7 @@
         await load();
       } catch (error) {
         status.textContent = error.message;
-        status.classList.add("pk-inline-status-error");
+        status.classList.add(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
       } finally {
         setBusy(button, false);
       }
@@ -212,7 +232,7 @@
         await load();
       } catch (error) {
         status.textContent = error.message;
-        status.classList.add("pk-inline-status-error");
+        status.classList.add(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
       } finally {
         setBusy(button, false);
       }
@@ -254,11 +274,11 @@
 
         if (resource.can_edit || resource.can_delete || (resource.actions || []).length) {
           const actions = document.createElement("td");
-          actions.className = "pk-row-actions";
+          actions.className = cls("rowActions", "pk-row-actions");
           actions.dataset.label = "Actions";
           if (canEdit) {
             const edit = document.createElement("a");
-            edit.className = "pk-table-action";
+            edit.className = cls("tableAction", "pk-table-action");
             edit.href = `${listPath}/${encodeURIComponent(id)}`;
             edit.textContent = "Edit";
             actions.appendChild(edit);
@@ -266,20 +286,20 @@
           visibleActions.forEach((action) => {
             actions.appendChild(actionButton(
               action.label,
-              action.variant === "danger" ? "pk-table-action pk-table-action-danger" : "pk-table-action",
+              action.variant === "danger" ? cls("tableAction", "pk-table-action") + " " + cls("inlineStatusError", "pk-table-action-danger") : cls("tableAction", "pk-table-action"),
               (event) => runAction(event.currentTarget, row, action),
             ));
           });
           if (canDelete) {
             actions.appendChild(actionButton(
               "Delete",
-              "pk-table-action pk-table-action-danger",
+              cls("tableAction", "pk-table-action") + " " + cls("inlineStatusError", "pk-table-action-danger"),
               (event) => deleteRow(event.currentTarget, row),
             ));
           }
           if (!canEdit && !canDelete && visibleActions.length === 0) {
             const unavailable = document.createElement("span");
-            unavailable.className = "pk-no-actions";
+            unavailable.className = cls("noActions", "pk-no-actions");
             unavailable.textContent = "No actions available";
             actions.appendChild(unavailable);
           }
@@ -295,12 +315,12 @@
         ? "No records on this page match your filter."
         : "There is nothing to show on this page yet.";
       status.textContent = `${visible.length} ${visible.length === 1 ? "record" : "records"} on this page`;
-      status.classList.remove("pk-inline-status-error");
+      status.classList.remove(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
     };
 
     const load = async () => {
       status.textContent = `Loading ${resource.plural_label}…`;
-      status.classList.remove("pk-inline-status-error");
+      status.classList.remove(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
       refresh.disabled = true;
       try {
         const separator = resource.api_path.includes("?") ? "&" : "?";
@@ -319,7 +339,7 @@
         empty.hidden = false;
         emptyCopy.textContent = "The data could not be loaded. Check your connection and try again.";
         status.textContent = error.message;
-        status.classList.add("pk-inline-status-error");
+        status.classList.add(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
         previous.disabled = true;
         next.disabled = true;
       } finally {

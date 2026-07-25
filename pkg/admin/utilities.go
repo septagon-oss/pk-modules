@@ -16,6 +16,7 @@ package admin
 // the same --pk-* token variables the shell renders.
 
 import (
+	"github.com/septagon-oss/pk-ui/render/web"
 	"github.com/septagon-oss/styleengine"
 	"github.com/septagon-oss/tw/emission"
 )
@@ -30,7 +31,15 @@ func adminUtilityCSS() string {
 	if err != nil {
 		return ""
 	}
-	css, err := emission.RoleVars().Merge(base).Render(styleengine.RenderOptions{Minify: true})
+	// Base covers every enumerable class but pre-generates no hover:/focus:
+	// variants; those come from the exact lists the components declare — both
+	// pk-ui's renderers and this package's own views — so an interactive state
+	// a component composes is always styled.
+	variants, err := emission.For(append(web.ClassLists(), viewClassLists()...)...)
+	if err != nil {
+		return ""
+	}
+	css, err := emission.RoleVars().Merge(base).Merge(variants).Render(styleengine.RenderOptions{Minify: true})
 	if err != nil {
 		return ""
 	}

@@ -45,3 +45,40 @@ func TestServedStylesheetCarriesAllFourLayers(t *testing.T) {
 		t.Error("utility rules do not reference role variables")
 	}
 }
+
+// TestLayoutEmbedsTheClassNameBridge pins the contract that lets _admin.js
+// style runtime-built elements with the same compiled class lists the Go
+// views use: the layout must embed the pk-classnames JSON, and the served
+// stylesheet must carry the interactive variants those lists compose.
+func TestLayoutEmbedsTheClassNameBridge(t *testing.T) {
+	t.Parallel()
+
+	m := newModule(t)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /admin = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="pk-classnames"`) {
+		t.Error("layout does not embed the pk-classnames bridge")
+	}
+	for _, key := range []string{"statusPill", "tableAction", "rowActions", "tag", "primaryCell"} {
+		if !strings.Contains(body, `"`+key+`"`) {
+			t.Errorf("pk-classnames bridge missing %q", key)
+		}
+	}
+
+	css := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(css, httptest.NewRequest(http.MethodGet, "/admin/static/_admin.css", nil))
+	sheet := css.Body.String()
+	for _, want := range []string{
+		`.hover\:bg-surface-hover:hover`,       // tableAction hover
+		`.focus-visible\:ring-2:focus-visible`, // focus ring variants
+		`.hover\:bg-surface-brand-hover:hover`, // primary button hover
+	} {
+		if !strings.Contains(sheet, want) {
+			t.Errorf("served stylesheet missing interactive variant %q", want)
+		}
+	}
+}

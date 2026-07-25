@@ -303,8 +303,11 @@ func TestAdminCSSCarriesResponsiveAndAccessibilityGuards(t *testing.T) {
 		":focus-visible",
 		"prefers-reduced-motion",
 		"overflow-x: hidden",
-		"grid-template-columns: minmax(92px, .34fr) minmax(0, 1fr)",
-		".pk-row-actions .pk-table-action",
+		// Tables now scroll horizontally on narrow screens (the design
+		// system's overflow-auto shell) instead of the retired td-grid
+		// transform; the guards below pin what replaced the component CSS.
+		".hover\\:bg-surface-hover:hover",
+		"--pk-role-surface-brand:",
 		`content: "Exit"`,
 		"max-width: min(185px, calc(100vw - 200px))",
 	} {

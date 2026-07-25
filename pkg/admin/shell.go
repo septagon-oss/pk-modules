@@ -10,12 +10,10 @@ package admin
 
 import (
 	"bytes"
-	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"sort"
@@ -26,10 +24,9 @@ import (
 
 	adminstatic "github.com/septagon-oss/pk-modules/pkg/admin/static"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
-)
 
-//go:embed templates
-var templatesFS embed.FS
+	g "maragu.dev/gomponents"
+)
 
 // ShellOptions configure a Shell at construction time.
 type ShellOptions struct {
@@ -48,9 +45,8 @@ type Shell struct {
 	pages     []portslib.AdminPage
 	sidebar   []portslib.SidebarSection
 
-	templates map[string]*template.Template
-	static    http.Handler
-	css       []byte
+	static http.Handler
+	css    []byte
 }
 
 // NewShell constructs a Shell with the given options. Empty Title and
@@ -67,7 +63,6 @@ func NewShell(opts ShellOptions) *Shell {
 	basePath = "/" + strings.Trim(basePath, "/")
 
 	s := &Shell{title: title, basePath: basePath}
-	s.templates = parsePageTemplates()
 	s.static = http.StripPrefix(basePath+"/static/", http.FileServer(http.FS(adminstatic.FS())))
 	s.css = composeCSS()
 	return s
@@ -85,22 +80,6 @@ func composeCSS() []byte {
 	out = append(out, utilities...)
 	out = append(out, '\n')
 	out = append(out, rules...)
-	return out
-}
-
-func parsePageTemplates() map[string]*template.Template {
-	pages := []string{"home", "entity_list", "entity_form"}
-	out := make(map[string]*template.Template, len(pages))
-	for _, page := range pages {
-		out[page] = template.Must(template.New("admin").Funcs(template.FuncMap{
-			"inc": func(value int) int { return value + 1 },
-		}).ParseFS(
-			templatesFS,
-			"templates/layout.tmpl",
-			"templates/sidebar.tmpl",
-			"templates/"+page+".tmpl",
-		))
-	}
 	return out
 }
 
@@ -508,11 +487,11 @@ func (s *Shell) renderHome(w http.ResponseWriter, r *http.Request) {
 				boolInt(resource.CanDelete) + len(resource.Actions)
 		}
 	}
-	s.render(w, "home", homeData{
+	s.render(w, homeView(homeData{
 		shellView: s.view(r, "Overview"),
 		Modules:   modules,
 		Stats:     stats,
-	})
+	}))
 }
 
 func boolInt(value bool) int {
@@ -532,11 +511,11 @@ func (s *Shell) renderEntityList(
 		http.Error(w, "admin render: invalid resource descriptor", http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "entity_list", entityListData{
+	s.render(w, entityListView(entityListData{
 		shellView:      s.view(r, resource.PluralLabel),
 		Resource:       resource,
 		ResourceConfig: config,
-	})
+	}))
 }
 
 func (s *Shell) renderEntityForm(
@@ -554,12 +533,12 @@ func (s *Shell) renderEntityForm(
 	if id != "" {
 		title = "Edit " + resource.SingularLabel
 	}
-	s.render(w, "entity_form", entityFormData{
+	s.render(w, entityFormView(entityFormData{
 		shellView:      s.view(r, title),
 		Resource:       resource,
 		ResourceConfig: config,
 		EntityID:       id,
-	})
+	}))
 }
 
 func encodeResource(resource portslib.AdminResource) (string, error) {
@@ -570,14 +549,11 @@ func encodeResource(resource portslib.AdminResource) (string, error) {
 	return base64.RawStdEncoding.EncodeToString(payload), nil
 }
 
-func (s *Shell) render(w http.ResponseWriter, name string, data any) {
-	tmpl, ok := s.templates[name]
-	if !ok {
-		http.Error(w, fmt.Sprintf("admin render: unknown template %q", name), http.StatusInternalServerError)
-		return
-	}
+// render writes a fully-composed view. Buffering first keeps the error path
+// clean: a rendering failure becomes a 500, never a torn page.
+func (s *Shell) render(w http.ResponseWriter, page g.Node) {
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+	if err := page.Render(&buf); err != nil {
 		http.Error(w, fmt.Sprintf("admin render: %v", err), http.StatusInternalServerError)
 		return
 	}
