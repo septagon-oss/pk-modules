@@ -42,8 +42,11 @@ func WithHasher(h passhash.Hasher) Option {
 	return func(c *config) { c.hasher = h }
 }
 
-// WithAuditEmitter wires an audit emitter used to record issue, verify,
-// and revoke events. Optional.
+// WithAuditEmitter wires an audit emitter used to record issue and revoke
+// events. Key verification is deliberately not audited: it happens on every
+// authenticated request, so emitting it would grow the append-only audit log in
+// proportion to traffic. Last use is tracked on the key itself as LastUsedAt.
+// Optional.
 func WithAuditEmitter(a audit.AuditEmitter) Option {
 	return func(c *config) { c.audit = a }
 }
