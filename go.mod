@@ -23,3 +23,8 @@ require (
 )
 
 retract v0.0.0 // broken: contained local replace directives
+
+// v0.4.0, v0.5.0, and v0.5.1 were withdrawn: their history was rewritten to
+// correct commit attribution, so those tags no longer resolve to the content the
+// module proxy recorded. v0.6.0 is the same code with clean history.
+retract [v0.4.0, v0.5.1]
