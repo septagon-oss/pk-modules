@@ -264,3 +264,28 @@ func TestCreateNil(t *testing.T) {
 		t.Fatal("Create(nil) should return an error")
 	}
 }
+
+func TestListExcludesRevoked(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	active := sampleKey("active")
+	revoked := sampleKey("revoked")
+	for _, k := range []*store.APIKey{active, revoked} {
+		if err := s.Create(ctx, k); err != nil {
+			t.Fatalf("Create %s: %v", k.ID, err)
+		}
+	}
+	if err := s.Revoke(ctx, "tenant-1", "revoked"); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+
+	got, err := s.List(ctx, "tenant-1")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "active" {
+		t.Fatalf("List after revoke = %+v, want only the active key", got)
+	}
+}

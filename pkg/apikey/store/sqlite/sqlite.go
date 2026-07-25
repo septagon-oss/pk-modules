@@ -149,11 +149,14 @@ func (s *Store) GetByPrefix(ctx context.Context, prefix string) ([]*store.APIKey
 	return out, nil
 }
 
-// List returns every API key for the tenant ordered by created_at desc.
+// List returns the tenant's active API keys ordered by created_at desc.
+// Revoked keys are excluded: revocation is the delete operation exposed to
+// operators, and a revoked key resurfacing in the list reads as a failed
+// delete. Revocations remain visible through the audit trail.
 func (s *Store) List(ctx context.Context, tenantID string) ([]*store.APIKey, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		selectColumns+` WHERE tenant_id = ? ORDER BY created_at DESC`,
+		selectColumns+` WHERE tenant_id = ? AND revoked_at IS NULL ORDER BY created_at DESC`,
 		tenantID,
 	)
 	if err != nil {

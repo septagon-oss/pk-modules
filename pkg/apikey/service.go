@@ -291,7 +291,7 @@ func (s *service) Revoke(ctx context.Context, tenantID, id string) error {
 	return nil
 }
 
-// List returns every key for the tenant.
+// List returns the tenant's active keys; revoked keys are excluded.
 func (s *service) List(ctx context.Context, tenantID string) ([]*APIKey, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, errors.New("apikey: tenant_id is required")

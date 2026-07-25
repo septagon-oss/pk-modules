@@ -50,7 +50,8 @@ type Store interface {
 	// Callers verify the bcrypt hash before trusting a candidate and read the
 	// tenant from the matched row.
 	GetByPrefix(ctx context.Context, prefix string) ([]*APIKey, error)
-	// List returns every key for the tenant ordered by creation time descending.
+	// List returns the tenant's active keys ordered by creation time
+	// descending. Revoked keys are excluded.
 	List(ctx context.Context, tenantID string) ([]*APIKey, error)
 	// Revoke marks the key identified by (tenantID, id) revoked. It returns
 	// ErrNotFound when no key exists in that tenant and is a no-op when the key

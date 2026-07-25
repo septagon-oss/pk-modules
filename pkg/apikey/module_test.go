@@ -314,22 +314,22 @@ func TestRevokeKeyMarksRevoked(t *testing.T) {
 	t.Parallel()
 	m := newModule(t)
 	ctx := context.Background()
-	_, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", nil, 0)
+	plaintext, issued, err := m.Service().Issue(ctx, "t-1", "u-1", "ci-bot", nil, 0)
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
 	if err := m.Service().Revoke(ctx, "t-1", issued.ID); err != nil {
 		t.Fatalf("Revoke: %v", err)
 	}
+	if _, err := m.Service().Verify(ctx, plaintext); err == nil {
+		t.Fatalf("Verify succeeded for a revoked key")
+	}
 	keys, err := m.Service().List(ctx, "t-1")
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(keys) != 1 {
-		t.Fatalf("List returned %d keys, want 1", len(keys))
-	}
-	if keys[0].RevokedAt == nil {
-		t.Fatalf("expected RevokedAt to be set after Revoke")
+	if len(keys) != 0 {
+		t.Fatalf("List returned %d keys, want 0: revoked keys stay out of the list", len(keys))
 	}
 }
 
@@ -585,5 +585,31 @@ func TestMigrationsEmbedded(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("migrations FS missing 0001_initial.up.sql; entries = %+v", entries)
+	}
+}
+
+func TestListOmitsRevokedKeys(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	ctx := context.Background()
+
+	_, keep, err := m.Service().Issue(ctx, "t-1", "u-1", "keep", nil, 0)
+	if err != nil {
+		t.Fatalf("Issue keep: %v", err)
+	}
+	_, drop, err := m.Service().Issue(ctx, "t-1", "u-1", "drop", nil, 0)
+	if err != nil {
+		t.Fatalf("Issue drop: %v", err)
+	}
+	if err := m.Service().Revoke(ctx, "t-1", drop.ID); err != nil {
+		t.Fatalf("Revoke: %v", err)
+	}
+
+	keys, err := m.Service().List(ctx, "t-1")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(keys) != 1 || keys[0].ID != keep.ID {
+		t.Fatalf("List after revoke returned %d keys (%+v), want only %q", len(keys), keys, keep.ID)
 	}
 }
