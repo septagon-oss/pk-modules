@@ -578,3 +578,80 @@ func TestCompose(t *testing.T) {
 		t.Fatalf("module count = %d", len(plan.Modules))
 	}
 }
+
+// TestSidebarSectionsMergeByLabel is the regression guard for the duplicated
+// group headings ("Access" twice, "Operations" three times) that appeared when
+// modules moved from per-module labels to shared category labels. Module
+// authors declare only their own SidebarSection — the shell owns turning those
+// declarations into one rendered group per distinct label, so a category shared
+// by three modules produces exactly one heading with all items under it.
+func TestSidebarSectionsMergeByLabel(t *testing.T) {
+	t.Parallel()
+	m := newModule(t)
+	register := func(section portslib.SidebarSection) {
+		t.Helper()
+		if err := m.Registrar().RegisterSidebarSection(section); err != nil {
+			t.Fatalf("register %s/%s: %v", section.ModuleID, section.Label, err)
+		}
+	}
+	// Registration order is deliberately scrambled; only Order may decide.
+	register(portslib.SidebarSection{ModuleID: "apikey", Label: "Access", Order: 30,
+		Items: []portslib.SidebarItem{{Path: "/admin/api-keys", Label: "API keys"}}})
+	register(portslib.SidebarSection{ModuleID: "audit", Label: "Operations", Order: 90,
+		Items: []portslib.SidebarItem{{Path: "/admin/audit", Label: "Audit log"}}})
+	register(portslib.SidebarSection{ModuleID: "tenant", Label: "Workspace", Order: 10,
+		Items: []portslib.SidebarItem{{Path: "/admin/tenants", Label: "Tenant"}}})
+	register(portslib.SidebarSection{ModuleID: "user", Label: "Access", Order: 20,
+		Items: []portslib.SidebarItem{{Path: "/admin/users", Label: "Users"}}})
+	register(portslib.SidebarSection{ModuleID: "health", Label: "Operations", Order: 80,
+		Items: []portslib.SidebarItem{{Path: "/admin/health", Label: "System health"}}})
+
+	sections := m.Shell().SidebarSections()
+	var labels []string
+	for _, s := range sections {
+		labels = append(labels, s.Label)
+	}
+	want := []string{"Workspace", "Access", "Operations"}
+	if len(labels) != len(want) {
+		t.Fatalf("SidebarSections labels = %v, want one group per distinct label %v", labels, want)
+	}
+	for i := range want {
+		if labels[i] != want[i] {
+			t.Fatalf("group %d = %q, want %q (groups sit at their earliest member's Order)", i, labels[i], want[i])
+		}
+	}
+	// Within a merged group, items keep their members' Order: Users (20)
+	// before API keys (30).
+	access := sections[1]
+	if len(access.Items) != 2 || access.Items[0].Label != "Users" || access.Items[1].Label != "API keys" {
+		t.Fatalf("Access items = %+v, want [Users, API keys] in member Order", access.Items)
+	}
+
+	// The chrome renders the rail on two surfaces (desktop aside and mobile
+	// drawer), so assert per surface: within the desktop rail each heading
+	// appears exactly once.
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	rec := httptest.NewRecorder()
+	m.HTTPHandler().ServeHTTP(rec, req)
+	body := rec.Body.String()
+	asideStart := strings.Index(body, "pk-admin-sidebar")
+	if asideStart == -1 {
+		t.Fatalf("desktop sidebar not rendered")
+	}
+	aside := body[asideStart:]
+	if end := strings.Index(aside, "</aside>"); end != -1 {
+		aside = aside[:end]
+	}
+	for _, label := range want {
+		if got := strings.Count(aside, ">"+label+"</h2>"); got != 1 {
+			t.Errorf("desktop rail renders heading %q %d times, want exactly once", label, got)
+		}
+	}
+	// Heading ids must be unique across the whole document — the two surfaces
+	// use distinct prefixes so aria-labelledby never points at an ambiguous id.
+	for _, id := range []string{`id="nav-access"`, `id="mnav-access"`, `id="nav-operations"`, `id="mnav-operations"`} {
+		if got := strings.Count(body, id); got != 1 {
+			t.Errorf("%s appears %d times in the document, want exactly once", id, got)
+		}
+	}
+}

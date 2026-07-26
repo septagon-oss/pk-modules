@@ -30,6 +30,7 @@ package admin
 
 import (
 	"encoding/json"
+	"strings"
 
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
@@ -167,7 +168,7 @@ func layout(view shellView, content g.Node) g.Node {
 						h.Summary(g.Attr("aria-label", "Open navigation"), g.Text("Menu")),
 						h.Nav(g.Attr("aria-label", "Mobile navigation"),
 							overviewLink(view),
-							sidebarSections(view),
+							sidebarSections(view, "mnav"),
 						),
 					),
 				),
@@ -178,7 +179,7 @@ func layout(view shellView, content g.Node) g.Node {
 						h.A(h.Class("pk-overview-link"), h.Href(view.BasePath), currentPage(view.CurrentPath == view.BasePath),
 							h.Span(g.Attr("aria-hidden", "true"), g.Text("⌂")), g.Text(" Overview"),
 						),
-						sidebarSections(view),
+						sidebarSections(view, "nav"),
 					),
 					h.Div(h.Class("pk-sidebar-foot"),
 						h.Span(g.Text("PlatformKit OSS")),
@@ -208,8 +209,12 @@ func currentPage(active bool) g.Node {
 	return g.Attr("aria-current", "page")
 }
 
-// sidebarSections renders the registered navigation rail.
-func sidebarSections(view shellView) g.Node {
+// sidebarSections renders the registered navigation rail. idPrefix scopes the
+// heading ids to the rendering surface: the chrome renders this rail twice
+// (desktop aside and mobile drawer), and without a per-surface prefix every
+// heading id appeared twice in the document — invalid HTML that leaves
+// aria-labelledby pointing at an ambiguous target.
+func sidebarSections(view shellView, idPrefix string) g.Node {
 	if len(view.Sidebar) == 0 {
 		return h.P(h.Class("pk-nav-empty"), g.Text("No management areas registered."))
 	}
@@ -224,10 +229,41 @@ func sidebarSections(view shellView) g.Node {
 				),
 			))
 		}
-		sections = append(sections, h.Section(h.Class("pk-nav-section"), g.Attr("aria-labelledby", "nav-"+section.ModuleID),
-			h.H2(h.ID("nav-"+section.ModuleID), g.Text(section.Label)),
+		// The heading id derives from the label, not a ModuleID: a rendered
+		// group is a category that may span several modules (SidebarSections
+		// merges same-label declarations), and labels are unique post-merge
+		// while a module registering two differently-labelled sections would
+		// repeat its id.
+		headingID := idPrefix + "-" + navSlug(section.Label)
+		sections = append(sections, h.Section(h.Class("pk-nav-section"), g.Attr("aria-labelledby", headingID),
+			h.H2(h.ID(headingID), g.Text(section.Label)),
 			h.Ul(items...),
 		))
 	}
 	return g.Group(sections)
+}
+
+// navSlug reduces a group label to a stable DOM id fragment: lowercase
+// alphanumerics with single hyphens ("API keys" -> "api-keys"). Labels are
+// unique after SidebarSections merges by label, so the derived ids are too.
+func navSlug(label string) string {
+	var b strings.Builder
+	b.Grow(len(label))
+	pendingHyphen := false
+	for _, r := range strings.ToLower(label) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			if pendingHyphen && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			pendingHyphen = false
+			b.WriteRune(r)
+		default:
+			pendingHyphen = true
+		}
+	}
+	if b.Len() == 0 {
+		return "section"
+	}
+	return b.String()
 }

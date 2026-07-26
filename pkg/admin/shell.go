@@ -276,18 +276,45 @@ func (s *Shell) Pages() []portslib.AdminPage {
 	return out
 }
 
-// SidebarSections returns sidebar sections sorted by Order then Label.
+// SidebarSections returns the navigation rail as it should render: one group
+// per distinct label, in Order.
+//
+// Composition contract: a module declares only its own SidebarSection — its
+// label names the *category* it belongs to ("Access", "Operations"), not the
+// module. The shell owns turning those independent declarations into the rail,
+// so three modules declaring "Operations" produce one Operations group holding
+// all their items, never three headings. Without this merge every module that
+// adopted a shared category label repeated that label in the rail, which is
+// exactly the bug this method now prevents.
+//
+// A group sits at its earliest member's Order, and items keep member order
+// within the group — so a module can only influence where its own entries go,
+// which is the whole point of registration being the module's entire job.
 func (s *Shell) SidebarSections() []portslib.SidebarSection {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]portslib.SidebarSection, len(s.sidebar))
-	copy(out, s.sidebar)
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Order != out[j].Order {
-			return out[i].Order < out[j].Order
+	members := make([]portslib.SidebarSection, len(s.sidebar))
+	copy(members, s.sidebar)
+	sort.SliceStable(members, func(i, j int) bool {
+		if members[i].Order != members[j].Order {
+			return members[i].Order < members[j].Order
 		}
-		return out[i].Label < out[j].Label
+		return members[i].Label < members[j].Label
 	})
+	groupAt := make(map[string]int, len(members))
+	out := make([]portslib.SidebarSection, 0, len(members))
+	for _, member := range members {
+		if at, ok := groupAt[member.Label]; ok {
+			out[at].Items = append(out[at].Items, member.Items...)
+			continue
+		}
+		groupAt[member.Label] = len(out)
+		group := member
+		// Copy the items so appending later members never mutates the slice a
+		// module handed to RegisterSidebarSection.
+		group.Items = append([]portslib.SidebarItem(nil), member.Items...)
+		out = append(out, group)
+	}
 	return out
 }
 
