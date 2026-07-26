@@ -17,6 +17,7 @@ import (
 	"github.com/septagon-oss/pk-core/pkg/security/passhash"
 
 	"github.com/septagon-oss/pk-modules/pkg/audit"
+	"github.com/septagon-oss/pk-modules/pkg/auth/store"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
 	"github.com/septagon-oss/pk-modules/pkg/user"
 )
@@ -26,6 +27,7 @@ type Option func(*config)
 
 type config struct {
 	sessions     SessionStore
+	store        store.Store
 	users        user.UserBoundaryReader
 	hasher       passhash.Hasher
 	policy       LoginPolicy
@@ -82,6 +84,14 @@ func WithAdminRegistrar(r portslib.AdminRegistrar) Option {
 // WithHealthRegistrar wires the host application's health registrar.
 func WithHealthRegistrar(r portslib.HealthRegistrar) Option {
 	return func(c *config) { c.health = r }
+}
+
+// WithStore wires any session store implementation — the sqlite adapter, the
+// postgres adapter, or your own. This is the engine-neutral seam every other
+// module exposes; prefer it over the SQLite-specific options below. It loses
+// only to an explicit WithSessionStore.
+func WithStore(s store.Store) Option {
+	return func(c *config) { c.store = s }
 }
 
 // WithSQLiteDB wires the default sqlite session store on top of a caller-owned

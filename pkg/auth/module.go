@@ -143,6 +143,8 @@ func resolveSessionStore(cfg config) (SessionStore, error) {
 	switch {
 	case cfg.sessions != nil:
 		return cfg.sessions, nil
+	case cfg.store != nil:
+		return newStoreAdapter(cfg.store), nil
 	case cfg.sqliteDB != nil:
 		st, err := sqlitestore.New(cfg.sqliteDB)
 		if err != nil {
@@ -241,10 +243,10 @@ func (m *Module) SessionTTL() time.Duration { return m.sessionTTL }
 // pkg/auth/store/sqlite into the public auth.SessionStore that operates on
 // auth.Session values.
 type storeAdapter struct {
-	inner *sqlitestore.Store
+	inner authstore.Store
 }
 
-func newStoreAdapter(s *sqlitestore.Store) SessionStore {
+func newStoreAdapter(s authstore.Store) SessionStore {
 	return &storeAdapter{inner: s}
 }
 
