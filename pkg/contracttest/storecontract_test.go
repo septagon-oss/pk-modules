@@ -5,6 +5,7 @@ package contracttest_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/septagon-oss/pk-modules/pkg/contracttest"
@@ -95,6 +96,7 @@ func TestAssertUpdateCannotReassignTenant_CorrectStorePasses(t *testing.T) {
 	m := newMemStore()
 	contracttest.AssertUpdateCannotReassignTenant(t, contracttest.TenantImmutableStore{
 		Create:            func(_ context.Context, tid string) (string, error) { return m.create(tid) },
+		Update:            func(_ context.Context, tid, id string) error { return m.get(tid, id) },
 		UpdateReassigning: func(_ context.Context, tid, id, newTID string) error { return m.updateKeepingTenant(tid, id, newTID) },
 		Get:               func(_ context.Context, tid, id string) error { return m.get(tid, id) },
 		NotFound:          userstore.ErrNotFound,
@@ -108,6 +110,7 @@ func TestAssertUpdateCannotReassignTenant_ReassigningStoreFails(t *testing.T) {
 		defer func() { _ = recover() }()
 		contracttest.AssertUpdateCannotReassignTenant(rec, contracttest.TenantImmutableStore{
 			Create: func(_ context.Context, tid string) (string, error) { return m.create(tid) },
+			Update: func(_ context.Context, tid, id string) error { return m.get(tid, id) },
 			// Writes the caller-supplied tenant — the row changes hands.
 			UpdateReassigning: func(_ context.Context, _, id, newTID string) error {
 				m.rows[id] = newTID
@@ -153,5 +156,26 @@ func TestAssertRetiredHiddenFromList_ListingRetiredRowsFails(t *testing.T) {
 	}()
 	if !rec.failed {
 		t.Fatal("helper did not catch a List that keeps returning retired rows")
+	}
+}
+
+// Codex's scenario: an adapter whose Update errors on everything previously
+// "passed" the reassignment check by failing to do anything at all.
+func TestAssertUpdateCannotReassignTenant_BrokenUpdateFails(t *testing.T) {
+	m := newMemStore()
+	rec := &recordingTB{TB: t}
+	broken := errors.New("connection unavailable")
+	func() {
+		defer func() { _ = recover() }()
+		contracttest.AssertUpdateCannotReassignTenant(rec, contracttest.TenantImmutableStore{
+			Create:            func(_ context.Context, tid string) (string, error) { return m.create(tid) },
+			Update:            func(_ context.Context, _, _ string) error { return broken },
+			UpdateReassigning: func(_ context.Context, _, _, _ string) error { return broken },
+			Get:               func(_ context.Context, tid, id string) error { return m.get(tid, id) },
+			NotFound:          userstore.ErrNotFound,
+		})
+	}()
+	if !rec.failed {
+		t.Fatal("helper accepted a store whose Update never works — the reassignment check is vacuous")
 	}
 }

@@ -7,6 +7,21 @@
 // every check adapts to your concrete signatures through closures, so it works
 // for any backend — SQLite, Postgres, or a service-backed adapter.
 //
+// WHAT THESE CHECKS DO NOT COVER. They are invariant probes, not a full
+// conformance suite, and the closure indirection means they test the glue you
+// write as much as the store beneath it. Passing them does not establish:
+// round-trip field fidelity (lists are compared by ID, so a dropped scope,
+// wrong timestamp or mangled JSON is invisible); ordering or pagination
+// stability; behaviour under concurrent writes; context cancellation (every
+// check uses context.Background); transaction participation, rollback or
+// isolation; error classification beyond the NotFound sentinel; or per-method
+// coverage — a store can pass every check here and still omit the tenant
+// predicate from a method no check touches. Deliberately global lookups, such
+// as an authentication path keyed on a credential prefix, are outside the
+// tenant-scoping model entirely and must be tested by the owning module.
+// Treat these as a floor to build module-specific store tests on, not a
+// ceiling that replaces them.
+//
 // Implements: REQ-PORTS-001.
 // Per: ADR-0009.
 // Discipline: C-14.
@@ -71,6 +86,11 @@ func AssertListTenantScoped(t testing.TB, s ListScopedStore) {
 type TenantImmutableStore struct {
 	// Create inserts a fresh row owned by tenantID and returns its ID.
 	Create func(ctx context.Context, tenantID string) (id string, err error)
+	// Update applies an ordinary, legitimate update to the row identified by
+	// (tenantID, id), leaving its tenant alone. It must succeed. Without this
+	// control the reassignment check passes trivially for a store whose Update
+	// is simply broken and errors on everything.
+	Update func(ctx context.Context, tenantID, id string) error
 	// UpdateReassigning applies an update to the row identified by
 	// (tenantID, id) that claims the row now belongs to newTenantID. Build the
 	// value your Update takes with its tenant field set to newTenantID and
@@ -89,8 +109,8 @@ type TenantImmutableStore struct {
 // field; both pass. What must not happen is the row changing hands.
 func AssertUpdateCannotReassignTenant(t testing.TB, s TenantImmutableStore) {
 	t.Helper()
-	if s.Create == nil || s.UpdateReassigning == nil || s.Get == nil || s.NotFound == nil {
-		t.Fatal("contracttest: TenantImmutableStore requires Create, UpdateReassigning, Get, and NotFound")
+	if s.Create == nil || s.Update == nil || s.UpdateReassigning == nil || s.Get == nil || s.NotFound == nil {
+		t.Fatal("contracttest: TenantImmutableStore requires Create, Update, UpdateReassigning, Get, and NotFound")
 	}
 	ctx := context.Background()
 	const owner, other = "tenant-owner", "tenant-other"
@@ -98,6 +118,13 @@ func AssertUpdateCannotReassignTenant(t testing.TB, s TenantImmutableStore) {
 	id, err := s.Create(ctx, owner)
 	if err != nil {
 		t.Fatalf("contracttest: Create(owner) failed: %v", err)
+	}
+
+	// Control: an ordinary update must work. A store whose Update errors on
+	// everything would otherwise "pass" the reassignment check by doing nothing.
+	if err := s.Update(ctx, owner, id); err != nil {
+		t.Fatalf("contracttest: an ordinary in-tenant Update failed: %v. "+
+			"The reassignment check below is only meaningful against a working Update.", err)
 	}
 
 	// Refusing outright is a valid implementation, so the error is not asserted.

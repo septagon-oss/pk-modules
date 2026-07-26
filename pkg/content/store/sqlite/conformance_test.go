@@ -51,6 +51,14 @@ func TestSQLiteStoreConformance(t *testing.T) {
 	t.Run("update cannot reassign tenant", func(t *testing.T) {
 		contracttest.AssertUpdateCannotReassignTenant(t, contracttest.TenantImmutableStore{
 			Create: create,
+			Update: func(ctx context.Context, tenantID, id string) error {
+				existing, err := s.Get(ctx, tenantID, id)
+				if err != nil {
+					return err
+				}
+				existing.Title = "ordinary update"
+				return s.Update(ctx, existing)
+			},
 			UpdateReassigning: func(ctx context.Context, tenantID, id, newTenantID string) error {
 				existing, err := s.Get(ctx, tenantID, id)
 				if err != nil {
