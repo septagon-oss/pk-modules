@@ -45,3 +45,12 @@ type QueryFilter struct {
 type AuditEmitter interface {
 	Emit(ctx context.Context, action, resource string, details map[string]any) error
 }
+
+// Compile-time proof the in-package implementations satisfy their ports
+// (Effective Go "interface checks"): *service serves the read/write surfaces,
+// *emitter the convenience emit surface.
+var (
+	_ AuditService = (*service)(nil)
+	_ AuditReader  = (*service)(nil)
+	_ AuditEmitter = (*emitter)(nil)
+)

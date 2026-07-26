@@ -19,3 +19,8 @@ import "context"
 type HealthService interface {
 	Check(ctx context.Context) Result
 }
+
+// Compile-time proof the in-package service satisfies its port (Effective Go
+// "interface checks"). The portslib.HealthRegistrar bridge is asserted beside
+// its adapter in service.go.
+var _ HealthService = (*service)(nil)

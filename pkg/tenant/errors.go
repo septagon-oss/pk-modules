@@ -6,6 +6,9 @@
 //
 // ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
 // Convention: C-14 (every Go file declares its purpose).
+// Implements: REQ-TENANT-001.
+// Per: ADR-0017.
+// Discipline: C-14.
 package tenant
 
 import "github.com/septagon-oss/pk-modules/pkg/tenant/store"

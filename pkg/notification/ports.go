@@ -33,3 +33,9 @@ type NotificationService interface {
 type NotificationSubscriber interface {
 	Subscribe(ctx context.Context, eventType string, handler portslib.NotificationChannel) error
 }
+
+// Compile-time proof the in-package implementations satisfy their ports
+// (Effective Go "interface checks"). NotificationSubscriber is a Pro-side
+// extension port (distinct Subscribe signature), so it has no in-repo impl to
+// assert.
+var _ NotificationService = (*service)(nil)

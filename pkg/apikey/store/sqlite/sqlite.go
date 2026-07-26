@@ -26,6 +26,10 @@ import (
 
 // Store is a database/sql-backed implementation of store.Store. It is safe
 // for concurrent use by multiple goroutines.
+// Compile-time proof the sqlite store satisfies the store.Store contract
+// (Effective Go "interface checks").
+var _ store.Store = (*Store)(nil)
+
 type Store struct {
 	db *sql.DB
 }

@@ -39,3 +39,13 @@ type LoginPolicy interface {
 	RecordFailure(ctx context.Context, tenantID, identifier string)
 	RecordSuccess(ctx context.Context, tenantID, identifier string)
 }
+
+// Compile-time proof the in-package implementations satisfy their ports
+// (Effective Go "interface checks"): drift between an impl and its contract
+// becomes a build error here, not a runtime surprise. LoginPolicy is a host-
+// supplied hook (wired via WithLoginPolicy), so it has no in-repo impl to
+// assert.
+var (
+	_ AuthService  = (*service)(nil)
+	_ SessionStore = (*storeAdapter)(nil)
+)

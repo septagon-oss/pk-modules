@@ -17,7 +17,12 @@ import (
 	"strings"
 
 	"github.com/septagon-oss/pk-core/pkg/observability/health"
+	"github.com/septagon-oss/pk-modules/pkg/portslib"
 )
+
+// Compile-time proof the registrar adapter satisfies the portslib bridge
+// (Effective Go "interface checks").
+var _ portslib.HealthRegistrar = (*registrarAdapter)(nil)
 
 // service is the default HealthService implementation. Pro can embed
 // *service to add SLO scoring and tenant-scoped probes.

@@ -31,3 +31,10 @@ type APIKeyService interface {
 type APIKeyAuthenticator interface {
 	Middleware() func(http.Handler) http.Handler
 }
+
+// Compile-time proof the in-package implementations satisfy their ports
+// (Effective Go "interface checks").
+var (
+	_ APIKeyService       = (*service)(nil)
+	_ APIKeyAuthenticator = (*authenticator)(nil)
+)

@@ -39,3 +39,12 @@ type ContentPublisher interface {
 	Publish(ctx context.Context, tenantID, id string) error
 	Unpublish(ctx context.Context, tenantID, id string) error
 }
+
+// Compile-time proof the in-package service satisfies every content port
+// (Effective Go "interface checks"): the read-only and publish-only surfaces
+// are segregated views over the same *service.
+var (
+	_ ContentService   = (*service)(nil)
+	_ ContentReader    = (*service)(nil)
+	_ ContentPublisher = (*service)(nil)
+)

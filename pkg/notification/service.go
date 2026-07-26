@@ -145,6 +145,10 @@ func shorten(s string) string {
 
 // inAppChannel is the built-in NotificationChannel that persists every
 // delivery to the store. It implements portslib.NotificationChannel.
+//
+// Compile-time proof of that (Effective Go "interface checks").
+var _ portslib.NotificationChannel = (*inAppChannel)(nil)
+
 type inAppChannel struct {
 	store store.Store
 }

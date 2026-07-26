@@ -42,3 +42,11 @@ type UserBoundaryRoleManager interface {
 	AssignRole(ctx context.Context, userID, role string) error
 	Roles(ctx context.Context, userID string) ([]string, error)
 }
+
+// Compile-time proof the in-package implementations satisfy their ports
+// (Effective Go "interface checks"). UserBoundaryRoleManager is a v0.1.0
+// placeholder fulfilled by pk-pro, so it has no in-repo impl to assert.
+var (
+	_ UserService        = (*service)(nil)
+	_ UserBoundaryReader = (*service)(nil)
+)

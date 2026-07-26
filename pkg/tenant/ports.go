@@ -34,3 +34,12 @@ type TenantContextProvider interface {
 type TenantIsolationEnforcer interface {
 	EnforceTenant(ctx context.Context, query string) (string, error)
 }
+
+// Compile-time proof the in-package implementations satisfy their ports
+// (Effective Go "interface checks"). TenantIsolationEnforcer is a persistence-
+// layer contract implemented by Pro stores, so it has no in-repo impl to
+// assert.
+var (
+	_ TenantService         = (*service)(nil)
+	_ TenantContextProvider = (*contextProvider)(nil)
+)
