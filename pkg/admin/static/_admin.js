@@ -25,10 +25,14 @@
     return `id-${hex}`;
   };
 
-  // The Go views embed the design system's compiled class lists as JSON
-  // (id "pk-classnames"), so elements built here wear the SAME classes the
-  // server renders — declared once, in Go. Legacy pk-* names remain as the
-  // fallback so the script still works against an older shell.
+  // The Go views embed pk-ui's compiled class lists as JSON (id
+  // "pk-classnames"), so elements built here wear the SAME classes the
+  // renderers produce — declared once, in pk-ui. Every string is a COMPLETE
+  // list for one element state; this script assigns them wholesale and never
+  // stacks two onto one element, because two single-class utilities that set
+  // the same property tie on specificity and stylesheet order would pick the
+  // winner. The bridge's presence is pinned by a server test; a missing key
+  // renders unstyled rather than mis-styled.
   const classNames = (() => {
     try {
       return JSON.parse(document.getElementById("pk-classnames")?.textContent || "{}");
@@ -36,13 +40,13 @@
       return {};
     }
   })();
-  const cls = (key, fallback) => classNames[key] || fallback;
-  // Status values map onto pill tones; anything unrecognized stays neutral.
+  const cls = (key) => classNames[key] || "";
+  // Status values map onto badge tones; anything unrecognized stays neutral.
   const statusTone = (normalized) => {
-    if (/^(ok|active|published|ready|healthy|enabled|sent)$/.test(normalized)) return cls("statusPositive", "");
-    if (/^(draft|pending|queued|paused|trial)$/.test(normalized)) return cls("statusWarning", "");
-    if (/^(error|failed|revoked|closed|disabled|expired|archived)$/.test(normalized)) return cls("statusDanger", "");
-    return cls("statusNeutral", "");
+    if (/^(ok|active|published|ready|healthy|enabled|sent)$/.test(normalized)) return cls("statusPositive");
+    if (/^(draft|pending|queued|paused|trial)$/.test(normalized)) return cls("statusWarning");
+    if (/^(error|failed|revoked|closed|disabled|expired|archived)$/.test(normalized)) return cls("statusDanger");
+    return cls("statusNeutral");
   };
 
   const resource = decodeConfig(page.dataset.resourceConfig);
@@ -142,17 +146,18 @@
     if (column.kind === "status" && value) {
       const pill = document.createElement("span");
       const normalized = String(value).toLowerCase();
-      pill.className = `${cls("statusPill", "pk-status")} ${statusTone(normalized)} pk-status-${normalized.replace(/[^a-z0-9]+/g, "-")}`.trim();
+      // pk-status-<value> is an unstyled, greppable hook for tests and users.
+      pill.className = `${statusTone(normalized)} pk-status-${normalized.replace(/[^a-z0-9]+/g, "-")}`.trim();
       pill.textContent = String(value);
       cell.appendChild(pill);
       return;
     }
     if (column.kind === "tags" && Array.isArray(value)) {
       const group = document.createElement("span");
-      group.className = cls("tagList", "pk-tag-list");
+      group.className = cls("tagList");
       value.forEach((item) => {
         const tag = document.createElement("span");
-        tag.className = cls("tag", "pk-tag");
+        tag.className = cls("tag");
         tag.textContent = item;
         group.appendChild(tag);
       });
@@ -160,7 +165,6 @@
       return;
     }
     cell.textContent = textValue(value, column.kind);
-    if (column.primary) cell.className += " " + cls("primaryCell", "pk-primary-cell");
   };
 
   const setBusy = (button, busy, busyLabel) => {
@@ -178,19 +182,95 @@
   };
 
   const initList = () => {
-    const table = document.getElementById("pk-resource-table");
+    // pk-resource-table is pk-ui Table's wrapper (the scrollable shell); the
+    // table, sortable header buttons, and tbody live inside it.
+    const shell = document.getElementById("pk-resource-table");
+    const table = shell.querySelector("table");
     const tbody = table.querySelector("tbody");
     const status = document.getElementById("pk-resource-status");
     const empty = document.getElementById("pk-resource-empty");
-    const emptyCopy = document.getElementById("pk-resource-empty-copy");
+    const noMatch = document.getElementById("pk-resource-nomatch");
     const search = document.getElementById("pk-resource-search");
     const refresh = document.getElementById("pk-resource-refresh");
-    const previous = document.getElementById("pk-page-prev");
-    const next = document.getElementById("pk-page-next");
-    const pageLabel = document.getElementById("pk-page-label");
+    const pagination = document.getElementById("pk-resource-pagination");
+    const previous = pagination.querySelector('[data-pk-pagination="prev"]');
+    const next = pagination.querySelector('[data-pk-pagination="next"]');
+    const pageLabel = pagination.querySelector('[data-pk-pagination="label"]');
+    const sortButtons = Array.from(table.querySelectorAll("thead button[data-pk-sort]"));
     const pageSize = 25;
     let offset = 0;
     let rows = [];
+
+    const setStatus = (message, isError) => {
+      // Tone is swapped, never stacked: muted and danger both set color, so
+      // the element wears exactly one of the two complete lists.
+      status.className = "pk-inline-status " + cls(isError ? "statusTextError" : "statusTextIdle");
+      status.textContent = message;
+    };
+
+    // Sort is page-scoped, like the filter beside it: the API pages by
+    // limit/offset without totals, so the console orders what it can see and
+    // says so. State lives in the URL hash (#sort=key:desc) so a sorted view
+    // is shareable and restorable.
+    let sortKey = null;
+    let sortAscending = true;
+    const readSortHash = () => {
+      const match = /(?:^|[#&])sort=([^:&]+):(asc|desc)$/.exec(window.location.hash);
+      if (!match) return;
+      if (!sortButtons.some((button) => button.dataset.pkSort === match[1])) return;
+      sortKey = match[1];
+      sortAscending = match[2] === "asc";
+    };
+    const writeSortHash = () => {
+      const hash = sortKey ? `#sort=${sortKey}:${sortAscending ? "asc" : "desc"}` : "";
+      window.history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+    };
+    const syncSortHeads = () => {
+      sortButtons.forEach((button) => {
+        const th = button.closest("th");
+        const icon = button.querySelector("[data-pk-sort-icon]");
+        if (button.dataset.pkSort === sortKey) {
+          th.setAttribute("aria-sort", sortAscending ? "ascending" : "descending");
+          if (icon) icon.textContent = sortAscending ? "↑" : "↓";
+        } else {
+          th.setAttribute("aria-sort", "none");
+          if (icon) icon.textContent = "↕";
+        }
+      });
+    };
+    const compareValues = (a, b) => {
+      const aMissing = a === null || a === undefined || a === "";
+      const bMissing = b === null || b === undefined || b === "";
+      if (aMissing || bMissing) return aMissing && bMissing ? 0 : (aMissing ? 1 : -1);
+      const aNum = typeof a === "number" ? a : Number(a);
+      const bNum = typeof b === "number" ? b : Number(b);
+      if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) return aNum - bNum;
+      return String(a).localeCompare(String(b), undefined, { sensitivity: "base", numeric: true });
+    };
+    const applySort = (list) => {
+      if (!sortKey) return list;
+      const direction = sortAscending ? 1 : -1;
+      return list
+        .map((row, index) => ({ row, index }))
+        .sort((a, b) => {
+          const order = compareValues(valueAt(a.row, sortKey), valueAt(b.row, sortKey));
+          return order !== 0 ? order * direction : a.index - b.index;
+        })
+        .map((entry) => entry.row);
+    };
+    sortButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const key = button.dataset.pkSort;
+        if (sortKey === key) {
+          sortAscending = !sortAscending;
+        } else {
+          sortKey = key;
+          sortAscending = true;
+        }
+        writeSortHash();
+        render();
+      });
+    });
 
     const actionButton = (label, className, handler) => {
       const button = document.createElement("button");
@@ -214,8 +294,7 @@
         notify(`${action.label} completed.`);
         await load();
       } catch (error) {
-        status.textContent = error.message;
-        status.classList.add(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
+        setStatus(error.message, true);
       } finally {
         setBusy(button, false);
       }
@@ -231,8 +310,7 @@
         notify(`${resource.singular_label} deleted.`);
         await load();
       } catch (error) {
-        status.textContent = error.message;
-        status.classList.add(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
+        setStatus(error.message, true);
       } finally {
         setBusy(button, false);
       }
@@ -240,13 +318,16 @@
 
     const render = () => {
       const query = search.value.trim().toLocaleLowerCase();
-      const visible = query
+      const filtered = query
         ? rows.filter((row) => JSON.stringify(row).toLocaleLowerCase().includes(query))
         : rows;
+      const visible = applySort(filtered);
+      syncSortHeads();
       tbody.replaceChildren();
 
       visible.forEach((row) => {
         const tr = document.createElement("tr");
+        tr.className = cls("row");
         const id = valueAt(row, resource.id_key || "id");
         const canEdit = Boolean(
           resource.can_edit && id && matchesCondition(row, resource.edit_when),
@@ -259,6 +340,7 @@
         );
         resource.columns.forEach((column) => {
           const cell = document.createElement("td");
+          cell.className = column.primary ? cls("tdPrimary") : cls("td");
           cell.dataset.label = column.label || column.key;
           const value = valueAt(row, column.key);
           if (column.primary && canEdit) {
@@ -273,12 +355,14 @@
         });
 
         if (resource.can_edit || resource.can_delete || (resource.actions || []).length) {
-          const actions = document.createElement("td");
-          actions.className = cls("rowActions", "pk-row-actions");
-          actions.dataset.label = "Actions";
+          const cell = document.createElement("td");
+          cell.className = cls("td");
+          cell.dataset.label = "Actions";
+          const actions = document.createElement("div");
+          actions.className = cls("rowActions");
           if (canEdit) {
             const edit = document.createElement("a");
-            edit.className = cls("tableAction", "pk-table-action");
+            edit.className = cls("tableAction");
             edit.href = `${listPath}/${encodeURIComponent(id)}`;
             edit.textContent = "Edit";
             actions.appendChild(edit);
@@ -286,41 +370,38 @@
           visibleActions.forEach((action) => {
             actions.appendChild(actionButton(
               action.label,
-              action.variant === "danger" ? cls("tableAction", "pk-table-action") + " " + cls("inlineStatusError", "pk-table-action-danger") : cls("tableAction", "pk-table-action"),
+              action.variant === "danger" ? cls("dangerAction") : cls("tableAction"),
               (event) => runAction(event.currentTarget, row, action),
             ));
           });
           if (canDelete) {
             actions.appendChild(actionButton(
               "Delete",
-              cls("tableAction", "pk-table-action") + " " + cls("inlineStatusError", "pk-table-action-danger"),
+              cls("dangerAction"),
               (event) => deleteRow(event.currentTarget, row),
             ));
           }
           if (!canEdit && !canDelete && visibleActions.length === 0) {
             const unavailable = document.createElement("span");
-            unavailable.className = cls("noActions", "pk-no-actions");
+            unavailable.className = cls("cellNote");
             unavailable.textContent = "No actions available";
             actions.appendChild(unavailable);
           }
-          tr.appendChild(actions);
+          cell.appendChild(actions);
+          tr.appendChild(cell);
         }
         tbody.appendChild(tr);
       });
 
       const hasRows = visible.length > 0;
-      table.hidden = !hasRows;
-      empty.hidden = hasRows;
-      emptyCopy.textContent = query
-        ? "No records on this page match your filter."
-        : "There is nothing to show on this page yet.";
-      status.textContent = `${visible.length} ${visible.length === 1 ? "record" : "records"} on this page`;
-      status.classList.remove(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
+      shell.hidden = !hasRows;
+      empty.hidden = hasRows || Boolean(query);
+      noMatch.hidden = hasRows || !query;
+      setStatus(`${visible.length} ${visible.length === 1 ? "record" : "records"} on this page`, false);
     };
 
     const load = async () => {
-      status.textContent = `Loading ${resource.plural_label}…`;
-      status.classList.remove(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
+      setStatus(`Loading ${resource.plural_label}…`, false);
       refresh.disabled = true;
       try {
         const separator = resource.api_path.includes("?") ? "&" : "?";
@@ -335,11 +416,10 @@
       } catch (error) {
         rows = [];
         tbody.replaceChildren();
-        table.hidden = true;
-        empty.hidden = false;
-        emptyCopy.textContent = "The data could not be loaded. Check your connection and try again.";
-        status.textContent = error.message;
-        status.classList.add(...cls("inlineStatusError", "pk-inline-status-error").split(" "));
+        shell.hidden = true;
+        empty.hidden = true;
+        noMatch.hidden = true;
+        setStatus(error.message, true);
         previous.disabled = true;
         next.disabled = true;
       } finally {
@@ -357,6 +437,7 @@
       offset += pageSize;
       load();
     });
+    readSortHash();
     load();
   };
 

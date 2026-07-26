@@ -9,9 +9,12 @@ package admin
 // toast), rendered with gomponents instead of text/template. The migration
 // draws one deliberate line, recorded here because the next reader will ask:
 //
-//   - System components — buttons, fields, tables, status, pagination, empty
-//     states — come from pk-ui and tw. They are the same implementation any
-//     module admin page composes, which is the point: one component system.
+//   - Components — buttons, fields, tables, status pills, tags, pagination,
+//     empty states — come from pk-ui ONLY: its renderers server-side, its
+//     exported class surface (web.ButtonClasses, web.TableClasses, …) for
+//     what _admin.js builds at runtime. The admin declares no component
+//     styling of its own; its only tw lists are page layout (layoutClasses
+//     below), which arranges components without ever styling one.
 //   - The console's voice — ruled-paper canvas, the brand mark, the dark
 //     field-navigation rail, the hero's editorial typography — remains
 //     product chrome in _admin.css, aligned with the design system through
@@ -20,9 +23,10 @@ package admin
 //
 // The class-name bridge: _admin.js builds table rows, status pills, and tags
 // in the browser, and must style them with the SAME compiled class lists the
-// Go views use. The layout therefore embeds a JSON map of compiled class
-// strings (id "pk-classnames"); the script reads it, with the legacy pk-*
-// names as fallback. Classes stay declared exactly once, in Go.
+// renderers use. The layout therefore embeds a JSON map of compiled pk-ui
+// class strings (id "pk-classnames"); the script assigns them wholesale and
+// never stacks two lists onto one element, mirroring pk-ui's own variant
+// discipline. Classes stay declared exactly once, in pk-ui.
 
 import (
 	"encoding/json"
@@ -30,96 +34,98 @@ import (
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 
+	"github.com/septagon-oss/pk-ui/render/web"
+	"github.com/septagon-oss/pk-ui/contracts"
 	"github.com/septagon-oss/tw"
 )
 
-// runtimeClasses are the compiled class lists _admin.js applies to elements it
-// creates at runtime. Declared with tw so the served utility layer always
-// carries their rules; TestServedStylesheetCoversRuntimeClasses pins that.
-var runtimeClasses = struct {
-	StatusPill     tw.ClassList
-	StatusPositive tw.ClassList
-	StatusWarning  tw.ClassList
-	StatusDanger   tw.ClassList
-	StatusNeutral  tw.ClassList
-	Tag            tw.ClassList
-	TagList        tw.ClassList
-	RowActions     tw.ClassList
-	TableAction    tw.ClassList
-	PrimaryCell    tw.ClassList
-	InlineError    tw.ClassList
-	NoActions      tw.ClassList
+// layoutClasses are the admin's page-arrangement lists: spacing, wrapping,
+// and grid flow. They are deliberately the ONLY tw lists the admin declares —
+// everything with a component identity (buttons, fields, tables, pills,
+// tags, pagination, empty states) comes from pk-ui, either through its
+// renderers or through its exported class surface. Layout is arrangement,
+// not identity; it has no variants and nothing to collide with.
+var layoutClasses = struct {
+	Toolbar     tw.ClassList
+	TagList     tw.ClassList
+	FormGrid    tw.ClassList
+	FieldWide   tw.ClassList
+	FormStack   tw.ClassList
+	ActionsRow  tw.ClassList
+	SecretStack tw.ClassList
+	SecretRow   tw.ClassList
 }{
-	StatusPill: tw.New().Display(tw.DisplayInlineFlex).Items(tw.ItemsCenter).
-		Rounded(tw.RadiusFull).PaddingX(tw.S2_5).PaddingY(tw.S0_5).
-		FontSize(tw.TextXS).FontWeight(tw.FontMedium),
-	StatusPositive: tw.New().Bg(tw.SurfaceSuccessSoft).TextColor(tw.FgSuccess),
-	StatusWarning:  tw.New().Bg(tw.SurfaceWarningSoft).TextColor(tw.FgWarning),
-	StatusDanger:   tw.New().Bg(tw.SurfaceDangerSoft).TextColor(tw.FgDanger),
-	StatusNeutral:  tw.New().Bg(tw.SurfaceTertiary).TextColor(tw.FgSecondary),
-	Tag: tw.New().Display(tw.DisplayInlineFlex).Items(tw.ItemsCenter).
-		Rounded(tw.RadiusMD).Border(tw.Border1).BorderColor(tw.BorderPrimary).
-		Bg(tw.SurfacePrimary).TextColor(tw.FgSecondary).
-		PaddingX(tw.S2).PaddingY(tw.S0_5).FontSize(tw.TextXS),
-	TagList:    tw.New().Display(tw.DisplayInlineFlex).Items(tw.ItemsCenter).Gap(tw.S1).FlexWrap(),
-	RowActions: tw.New().Display(tw.DisplayFlex).Items(tw.ItemsCenter).Gap(tw.S2).Justify(tw.JustifyEnd),
-	TableAction: tw.New().Display(tw.DisplayInlineFlex).Items(tw.ItemsCenter).
-		Rounded(tw.RadiusMD).Border(tw.Border1).BorderColor(tw.BorderPrimary).
-		Bg(tw.SurfacePrimary).TextColor(tw.FgSecondary).
-		PaddingX(tw.S2_5).PaddingY(tw.S1).FontSize(tw.TextXS).FontWeight(tw.FontMedium).
-		Cursor(tw.CursorPointer).Transition(tw.TransitionColors).
-		On(tw.StateHover, func(c tw.ClassList) tw.ClassList { return c.Bg(tw.SurfaceHover).TextColor(tw.FgPrimary) }).
-		On(tw.StateFocusVisible, func(c tw.ClassList) tw.ClassList {
-			return c.Ring(tw.Ring2).RingColor(tw.RingFocus).RingOffset(tw.RingOffset1)
-		}),
-	PrimaryCell: tw.New().FontWeight(tw.FontSemibold).TextColor(tw.FgPrimary),
-	InlineError: tw.New().TextColor(tw.FgDanger),
-	NoActions:   tw.New().TextColor(tw.FgMuted).FontSize(tw.TextXS),
+	Toolbar: tw.New().Display(tw.DisplayFlex).Items(tw.ItemsCenter).Gap(tw.S3).
+		FlexWrap().MarginY(tw.S4),
+	TagList: tw.New().Display(tw.DisplayInlineFlex).Items(tw.ItemsCenter).Gap(tw.S1).FlexWrap(),
+	FormGrid: tw.New().Display(tw.DisplayGrid).GridCols(1).Gap(tw.S5).MarginY(tw.S2).
+		Breakpoint(tw.BreakpointMD, func(c tw.ClassList) tw.ClassList { return c.GridCols(2) }),
+	FieldWide:   tw.New().ColSpanFull(),
+	FormStack:   tw.New().Display(tw.DisplayFlex).FlexDir(tw.FlexCol).Gap(tw.S6).MarginY(tw.S4),
+	ActionsRow:  tw.New().Display(tw.DisplayFlex).Items(tw.ItemsCenter).Gap(tw.S3),
+	SecretStack: tw.New().Display(tw.DisplayFlex).FlexDir(tw.FlexCol).Gap(tw.S3).MarginY(tw.S4),
+	SecretRow:   tw.New().Display(tw.DisplayFlex).Items(tw.ItemsCenter).Gap(tw.S3).FlexWrap(),
 }
 
-// classNamesJSON renders the bridge payload. Keys are the vocabulary
-// _admin.js consumes; values are compiled class strings.
+// classNamesJSON renders the bridge payload _admin.js styles runtime-built
+// elements with. Every component string is a COMPLETE pk-ui class list —
+// the script assigns them, it never stacks two lists that could contest a
+// property (the same variant discipline pk-ui enforces internally). Keys
+// are the script's vocabulary; values are compiled pk-ui lists, so the
+// design system stays declared exactly once, in pk-ui.
 func classNamesJSON() string {
+	table := web.TableClasses()
 	payload := map[string]string{
-		"statusPill":     runtimeClasses.StatusPill.Compile(),
-		"statusPositive": runtimeClasses.StatusPositive.Compile(),
-		"statusWarning":  runtimeClasses.StatusWarning.Compile(),
-		"statusDanger":   runtimeClasses.StatusDanger.Compile(),
-		"statusNeutral":  runtimeClasses.StatusNeutral.Compile(),
-		"tag":            runtimeClasses.Tag.Compile(),
-		"tagList":        runtimeClasses.TagList.Compile(),
-		"rowActions":     runtimeClasses.RowActions.Compile(),
-		"tableAction":    runtimeClasses.TableAction.Compile(),
-		"primaryCell":    runtimeClasses.PrimaryCell.Compile(),
-		"inlineStatusError": runtimeClasses.InlineError.Compile() +
-			" " + "pk-inline-status-error", // keeps the aria/status hook greppable
-		"noActions": runtimeClasses.NoActions.Compile(),
+		"statusPositive": web.BadgeClasses("success").Compile(),
+		"statusWarning":  web.BadgeClasses("warning").Compile(),
+		"statusDanger":   web.BadgeClasses("error").Compile(),
+		"statusNeutral":  web.BadgeClasses("default").Compile(),
+
+		"tag":     web.TagClasses(false).Compile(),
+		"tagList": layoutClasses.TagList.Compile(),
+
+		"row":       table.Row.Compile(),
+		"td":        table.Td.Compile(),
+		"tdPrimary": table.TdPrimary.Compile(),
+		"cellNote":  table.CellNote.Compile(),
+
+		"rowActions":   table.ActionsCell.Compile(),
+		"tableAction":  web.ButtonClasses("secondary", "xs").Compile(),
+		"dangerAction": web.ButtonClasses("error", "xs").Compile(),
+
+		"statusTextIdle":  web.TextClasses("muted", "sm", "").Compile(),
+		"statusTextError": web.TextClasses("danger", "sm", "").Compile(),
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		// The payload is a map of compiled constants; failure here is a
-		// programmer error, and an empty object keeps the legacy fallback path.
+		// programmer error, and an empty object degrades to unstyled rows
+		// rather than a broken console.
 		return "{}"
 	}
 	return string(raw)
 }
 
-// viewClassLists returns every tw ClassList the Go views and the runtime
-// bridge compose, so the served stylesheet can carry their rules — including
-// the hover:/focus-visible: variants Base() alone does not pre-generate.
+// viewClassLists returns the admin-declared lists the served stylesheet must
+// carry beyond web.ClassLists(): only the layout lists above. Every
+// component rule already flows from pk-ui's registry.
 func viewClassLists() []tw.ClassList {
 	return []tw.ClassList{
-		runtimeClasses.StatusPill, runtimeClasses.StatusPositive,
-		runtimeClasses.StatusWarning, runtimeClasses.StatusDanger,
-		runtimeClasses.StatusNeutral, runtimeClasses.Tag, runtimeClasses.TagList,
-		runtimeClasses.RowActions, runtimeClasses.TableAction,
-		runtimeClasses.PrimaryCell, runtimeClasses.InlineError,
-		runtimeClasses.NoActions,
-		listClasses.Btn, listClasses.BtnPrimary, listClasses.Search,
-		listClasses.SearchBox, listClasses.Table, listClasses.Th,
-		formClasses.Input, formClasses.Status, formClasses.Legend,
-		formClasses.Grid,
+		layoutClasses.Toolbar, layoutClasses.TagList, layoutClasses.FormGrid,
+		layoutClasses.FieldWide, layoutClasses.FormStack, layoutClasses.ActionsRow,
+		layoutClasses.SecretStack, layoutClasses.SecretRow,
 	}
+}
+
+// contractProps builds the ComponentProps for an element _admin.js binds by
+// id, optionally with extra contract attributes.
+func contractProps(id string, attrs map[string]string) contracts.ComponentProps {
+	return contracts.ComponentProps{ID: id, Attrs: attrs}
+}
+
+// hiddenProps builds the ComponentProps for a panel the script reveals.
+func hiddenProps(id string) contracts.ComponentProps {
+	return contracts.ComponentProps{ID: id, Hidden: true}
 }
 
 // layout renders the shared document. The chrome markup and class names are

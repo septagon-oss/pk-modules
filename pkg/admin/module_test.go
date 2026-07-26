@@ -222,7 +222,7 @@ func TestHTTPHandlerServesAdminJavaScript(t *testing.T) {
 		t.Fatal("admin behavior asset is missing UTF-8 byte-limit validation")
 	}
 	if !strings.Contains(rec.Body.String(), `cell.dataset.label = column.label`) ||
-		!strings.Contains(rec.Body.String(), `actions.dataset.label = "Actions"`) {
+		!strings.Contains(rec.Body.String(), `cell.dataset.label = "Actions"`) {
 		t.Fatal("admin behavior asset is missing responsive table labels")
 	}
 }
@@ -276,10 +276,15 @@ func TestEntityListRendersDeclaredColumnsAndAccessibleControls(t *testing.T) {
 	m.HTTPHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/user_management/User", nil))
 	body := rec.Body.String()
 	for _, want := range []string{
-		`scope="col">Email`,
+		// Sortable headers render a real button inside the th: the column
+		// label sits in the button, aria-sort on the cell.
+		`aria-sort="none"`,
+		`data-pk-sort="email"`,
+		`>Email<`,
 		`type="search"`,
 		`role="status"`,
 		`aria-label="Pagination"`,
+		`data-pk-pagination="prev"`,
 		`data-resource-config=`,
 	} {
 		if !strings.Contains(body, want) {

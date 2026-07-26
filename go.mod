@@ -6,7 +6,7 @@ require (
 	github.com/septagon-oss/pk-core v0.1.0
 	github.com/septagon-oss/pk-design v0.2.0
 	github.com/septagon-oss/pk-shared v0.2.0
-	github.com/septagon-oss/pk-ui v0.1.1
+	github.com/septagon-oss/pk-ui v0.2.4
 	github.com/septagon-oss/styleengine v0.1.0
 	github.com/septagon-oss/tw v0.2.2
 	maragu.dev/gomponents v1.3.0

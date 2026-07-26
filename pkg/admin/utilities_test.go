@@ -63,7 +63,12 @@ func TestLayoutEmbedsTheClassNameBridge(t *testing.T) {
 	if !strings.Contains(body, `id="pk-classnames"`) {
 		t.Error("layout does not embed the pk-classnames bridge")
 	}
-	for _, key := range []string{"statusPill", "tableAction", "rowActions", "tag", "primaryCell"} {
+	for _, key := range []string{
+		"statusPositive", "statusWarning", "statusDanger", "statusNeutral",
+		"tag", "tagList", "row", "td", "tdPrimary", "cellNote",
+		"rowActions", "tableAction", "dangerAction",
+		"statusTextIdle", "statusTextError",
+	} {
 		if !strings.Contains(body, `"`+key+`"`) {
 			t.Errorf("pk-classnames bridge missing %q", key)
 		}
