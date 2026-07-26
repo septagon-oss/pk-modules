@@ -34,8 +34,8 @@ import (
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 
-	"github.com/septagon-oss/pk-ui/render/web"
 	"github.com/septagon-oss/pk-ui/contracts"
+	"github.com/septagon-oss/pk-ui/render/web"
 	"github.com/septagon-oss/tw"
 )
 
@@ -46,7 +46,6 @@ import (
 // renderers or through its exported class surface. Layout is arrangement,
 // not identity; it has no variants and nothing to collide with.
 var layoutClasses = struct {
-	Toolbar     tw.ClassList
 	TagList     tw.ClassList
 	FormGrid    tw.ClassList
 	FieldWide   tw.ClassList
@@ -55,8 +54,6 @@ var layoutClasses = struct {
 	SecretStack tw.ClassList
 	SecretRow   tw.ClassList
 }{
-	Toolbar: tw.New().Display(tw.DisplayFlex).Items(tw.ItemsCenter).Gap(tw.S3).
-		FlexWrap().MarginY(tw.S4),
 	TagList: tw.New().Display(tw.DisplayInlineFlex).Items(tw.ItemsCenter).Gap(tw.S1).FlexWrap(),
 	FormGrid: tw.New().Display(tw.DisplayGrid).GridCols(1).Gap(tw.S5).MarginY(tw.S2).
 		Breakpoint(tw.BreakpointMD, func(c tw.ClassList) tw.ClassList { return c.GridCols(2) }),
@@ -111,7 +108,7 @@ func classNamesJSON() string {
 // component rule already flows from pk-ui's registry.
 func viewClassLists() []tw.ClassList {
 	return []tw.ClassList{
-		layoutClasses.Toolbar, layoutClasses.TagList, layoutClasses.FormGrid,
+		layoutClasses.TagList, layoutClasses.FormGrid,
 		layoutClasses.FieldWide, layoutClasses.FormStack, layoutClasses.ActionsRow,
 		layoutClasses.SecretStack, layoutClasses.SecretRow,
 	}

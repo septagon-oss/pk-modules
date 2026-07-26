@@ -18,8 +18,8 @@ github.com/septagon-oss/pk-design v0.2.0 h1:su0vGi2RijPbHn10QxY3QfTITbA0BgGAbDu+
 github.com/septagon-oss/pk-design v0.2.0/go.mod h1:gHPDkDfgfgEAOGeSG7mv3gtN0DyDLh7KpxsCg6onsv4=
 github.com/septagon-oss/pk-shared v0.2.0 h1:zRtI+wMhVuuudX2o/qaS45w3jKMR5WmkQ3mJ/wTQnBQ=
 github.com/septagon-oss/pk-shared v0.2.0/go.mod h1:Rxlqz9xl3BNdwujKxuorJYefVu3kWBGs/qVxjHy1rTc=
-github.com/septagon-oss/pk-ui v0.2.4 h1:S0FaC85Gor5Bh5fODPTdScX8OxSajxHVRKqnat/bhzo=
-github.com/septagon-oss/pk-ui v0.2.4/go.mod h1:b23I52xa7bzaD/btSN3UyDKSQ3EMMS6DdYIw25Brohc=
+github.com/septagon-oss/pk-ui v0.3.0 h1:zhdfibdWlUyHIU/Wp4P/uZHLSseMieLViAcX8WgapLQ=
+github.com/septagon-oss/pk-ui v0.3.0/go.mod h1:b23I52xa7bzaD/btSN3UyDKSQ3EMMS6DdYIw25Brohc=
 github.com/septagon-oss/styleengine v0.1.0 h1:5H/P2aVvr+cLG0LExkdkXgK5m3Qd/SgKbSlMk+xrpKs=
 github.com/septagon-oss/styleengine v0.1.0/go.mod h1:bZdiEW66RcjYPdP629M/EQGW+0ES5YXNgo8IOgrhvgw=
 github.com/septagon-oss/tw v0.2.2 h1:hFpnotjMFG/n96WD7GLgfSBi6UnvB1ZKkhQtgvhHHZA=
