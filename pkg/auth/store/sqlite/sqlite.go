@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/septagon-oss/pk-modules/pkg/auth/store"
+	"github.com/septagon-oss/pk-modules/pkg/migrate"
 )
 
 // Store is a database/sql-backed implementation of the auth SessionStore.
@@ -75,11 +76,16 @@ CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_tenant ON auth_sessions(tenant_id);
 `
 
+// migrations is this adapter's schema history. 0001 is the schema exactly as
+// it shipped before the ledger existed, so a database created by an earlier
+// release adopts it as a recorded no-op rather than a rebuild. Never edit an
+// applied migration — add the next one.
+var migrations = []migrate.Migration{
+	{Name: "0001_create_auth", SQL: schemaDDL},
+}
+
 func (s *Store) ensureSchema(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, schemaDDL); err != nil {
-		return fmt.Errorf("auth/sqlite: ensure schema: %w", err)
-	}
-	return nil
+	return migrate.Run(ctx, s.db, migrate.Options{Module: "auth", Postgres: false}, migrations)
 }
 
 // Create inserts a session. Returns store.ErrDuplicate if the primary key

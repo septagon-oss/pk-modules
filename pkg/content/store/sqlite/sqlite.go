@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/septagon-oss/pk-modules/pkg/content/store"
+	"github.com/septagon-oss/pk-modules/pkg/migrate"
 )
 
 // Store is a database/sql-backed implementation of store.Store. It is safe
@@ -84,11 +85,16 @@ CREATE INDEX IF NOT EXISTS idx_content_tenant ON content(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_content_published ON content(published_at);
 `
 
+// migrations is this adapter's schema history. 0001 is the schema exactly as
+// it shipped before the ledger existed, so a database created by an earlier
+// release adopts it as a recorded no-op rather than a rebuild. Never edit an
+// applied migration — add the next one.
+var migrations = []migrate.Migration{
+	{Name: "0001_create_content", SQL: schemaDDL},
+}
+
 func (s *Store) ensureSchema(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, schemaDDL); err != nil {
-		return fmt.Errorf("content/sqlite: ensure schema: %w", err)
-	}
-	return nil
+	return migrate.Run(ctx, s.db, migrate.Options{Module: "content", Postgres: false}, migrations)
 }
 
 const selectColumns = `SELECT id, tenant_id, kind, slug, title, body, body_format, author_id, published_at, created_at, updated_at FROM content`

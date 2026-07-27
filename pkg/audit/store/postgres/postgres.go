@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/septagon-oss/pk-modules/pkg/audit/store"
+	"github.com/septagon-oss/pk-modules/pkg/migrate"
 )
 
 // Store is a database/sql-backed implementation of store.Store for Postgres.
@@ -82,11 +83,16 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_tenant_emitted ON audit_events(tenan
 CREATE INDEX IF NOT EXISTS idx_audit_events_actor_emitted ON audit_events(actor, emitted_at);
 `
 
+// migrations is this adapter's schema history. 0001 is the schema exactly as
+// it shipped before the ledger existed, so a database created by an earlier
+// release adopts it as a recorded no-op rather than a rebuild. Never edit an
+// applied migration — add the next one.
+var migrations = []migrate.Migration{
+	{Name: "0001_create_audit", SQL: schemaDDL},
+}
+
 func (s *Store) ensureSchema(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, schemaDDL); err != nil {
-		return fmt.Errorf("audit/postgres: ensure schema: %w", err)
-	}
-	return nil
+	return migrate.Run(ctx, s.db, migrate.Options{Module: "audit", Postgres: true}, migrations)
 }
 
 // Append inserts an audit event. Returns store.ErrDuplicateID when the ID is

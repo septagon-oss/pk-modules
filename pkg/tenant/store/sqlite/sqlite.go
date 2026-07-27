@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/septagon-oss/pk-modules/pkg/migrate"
 	"github.com/septagon-oss/pk-modules/pkg/tenant/store"
 )
 
@@ -77,11 +78,16 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
 `
 
+// migrations is this adapter's schema history. 0001 is the schema exactly as
+// it shipped before the ledger existed, so a database created by an earlier
+// release adopts it as a recorded no-op rather than a rebuild. Never edit an
+// applied migration — add the next one.
+var migrations = []migrate.Migration{
+	{Name: "0001_create_tenant", SQL: schemaDDL},
+}
+
 func (s *Store) ensureSchema(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, schemaDDL); err != nil {
-		return fmt.Errorf("tenant/sqlite: ensure schema: %w", err)
-	}
-	return nil
+	return migrate.Run(ctx, s.db, migrate.Options{Module: "tenant", Postgres: false}, migrations)
 }
 
 // Create inserts a tenant. Returns store.ErrDuplicateSlug when the slug is

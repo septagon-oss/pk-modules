@@ -54,6 +54,11 @@ var shared = map[string]bool{
 	"portslib":       true,
 	"contracttest":   true,
 	"modulecontract": true,
+	// migrate is schema-evolution machinery every store drives, not a peer
+	// module. Its presence here was a decision the guard forced: adopting it
+	// across the adapters turned every module into a "consumer" of migrate
+	// until this line said otherwise, which is the review step working.
+	"migrate": true,
 }
 
 // Ports declares, per providing module, the exported identifiers that SIBLING

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/septagon-oss/pk-modules/pkg/migrate"
 	"github.com/septagon-oss/pk-modules/pkg/notification/store"
 )
 
@@ -91,11 +92,16 @@ CREATE TABLE IF NOT EXISTS notification_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_notif_subs_user ON notification_subscriptions(user_id);
 `
 
+// migrations is this adapter's schema history. 0001 is the schema exactly as
+// it shipped before the ledger existed, so a database created by an earlier
+// release adopts it as a recorded no-op rather than a rebuild. Never edit an
+// applied migration — add the next one.
+var migrations = []migrate.Migration{
+	{Name: "0001_create_notification", SQL: schemaDDL},
+}
+
 func (s *Store) ensureSchema(ctx context.Context) error {
-	if _, err := s.db.ExecContext(ctx, schemaDDL); err != nil {
-		return fmt.Errorf("notification/postgres: ensure schema: %w", err)
-	}
-	return nil
+	return migrate.Run(ctx, s.db, migrate.Options{Module: "notification", Postgres: true}, migrations)
 }
 
 const selectNotificationColumns = `SELECT id, tenant_id, user_id, title, body, category, severity, data, read_at, emitted_at FROM notifications`
