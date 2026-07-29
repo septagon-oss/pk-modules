@@ -54,6 +54,7 @@ func NewModule(opts ...Option) (*Module, error) {
 	shell := NewShell(ShellOptions{
 		Title:    cfg.title,
 		BasePath: cfg.basePath,
+		Branding: cfg.branding,
 	})
 
 	m := &Module{

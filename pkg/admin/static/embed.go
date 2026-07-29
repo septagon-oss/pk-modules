@@ -16,7 +16,7 @@ import (
 	"io/fs"
 )
 
-//go:embed _admin.css _admin.js
+//go:embed _admin.css _admin.js favicon.svg
 var assets embed.FS
 
 // FS returns the embedded static asset filesystem rooted at the admin static

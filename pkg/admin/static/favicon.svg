@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Mirrors .pk-brand-mark in _admin.css: three signal squares in a 2x2
+       grid (gap 3, padding 5, hairline frame) on the console's dark chrome. -->
+  <rect width="32" height="32" fill="#12201d"/>
+  <rect x="1.5" y="1.5" width="29" height="29" fill="none" stroke="#ffffff" stroke-opacity=".38"/>
+  <rect x="5" y="5" width="9" height="9" fill="#d8f35d"/>
+  <rect x="17.5" y="5.5" width="8" height="8" fill="none" stroke="#ffffff" stroke-opacity=".45"/>
+  <rect x="5" y="23" width="22" height="4" fill="#d8f35d"/>
+</svg>

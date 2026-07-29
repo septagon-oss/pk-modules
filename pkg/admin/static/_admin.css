@@ -156,6 +156,19 @@ a:hover {
   text-transform: uppercase;
 }
 
+.pk-brand-logo {
+  height: 31px;
+  width: auto;
+  border-radius: 6px;
+}
+
+/* Documented hook: the branding module's admin page renders its uploaded-logo
+   preview with this class. */
+.logo-preview {
+  max-width: 64px;
+  height: auto;
+}
+
 .pk-brand-mark {
   position: relative;
   width: 31px;

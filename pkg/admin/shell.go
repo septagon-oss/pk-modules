@@ -32,6 +32,9 @@ import (
 type ShellOptions struct {
 	Title    string
 	BasePath string
+	// Branding, when non-nil, themes the chrome per tenant and gates
+	// incomplete setups onto the branding page.
+	Branding portslib.BrandingResolver
 }
 
 // Shell is the in-memory AdminRegistrar implementation. It stores registered
@@ -39,6 +42,7 @@ type ShellOptions struct {
 type Shell struct {
 	title    string
 	basePath string
+	branding portslib.BrandingResolver
 
 	mu        sync.RWMutex
 	resources []portslib.AdminResource
@@ -62,7 +66,7 @@ func NewShell(opts ShellOptions) *Shell {
 	}
 	basePath = "/" + strings.Trim(basePath, "/")
 
-	s := &Shell{title: title, basePath: basePath}
+	s := &Shell{title: title, basePath: basePath, branding: opts.Branding}
 	s.static = http.StripPrefix(basePath+"/static/", http.FileServer(http.FS(adminstatic.FS())))
 	s.css = composeCSS()
 	return s
@@ -342,7 +346,17 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write(s.css)
 			return
 		}
+		if urlPath == staticPrefix+"_branding.css" && s.branding != nil {
+			s.serveBrandingCSS(w, r)
+			return
+		}
 		s.static.ServeHTTP(w, r)
+		return
+	}
+
+	profile := s.resolveBranding(r)
+	if s.branding != nil && profile.TenantID != "" && !profile.SetupComplete && urlPath != s.basePath+"/branding" {
+		http.Redirect(w, r, s.basePath+"/branding", http.StatusSeeOther)
 		return
 	}
 
@@ -351,7 +365,7 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if urlPath == s.basePath || urlPath == s.basePath+"/" {
-		s.renderHome(w, r)
+		s.renderHome(w, r, profile)
 		return
 	}
 
@@ -362,15 +376,15 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if found {
 				switch len(parts) {
 				case 2:
-					s.renderEntityList(w, r, resource)
+					s.renderEntityList(w, r, resource, profile)
 					return
 				case 3:
 					switch {
 					case parts[2] == "new" && resource.CanCreate:
-						s.renderEntityForm(w, r, resource, "")
+						s.renderEntityForm(w, r, resource, "", profile)
 						return
 					case parts[2] != "new" && resource.CanEdit:
-						s.renderEntityForm(w, r, resource, parts[2])
+						s.renderEntityForm(w, r, resource, parts[2], profile)
 						return
 					}
 				}
@@ -378,6 +392,44 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.NotFound(w, r)
+}
+
+// serveBrandingCSS serves the resolver's per-tenant theme stylesheet at
+// {basePath}/static/_branding.css. Anonymous requests and resolver failures
+// serve an empty stylesheet: theming degrades, the console still renders.
+// Cache privately and briefly — the document is tenant-specific and changes
+// when an operator saves branding.
+func (s *Shell) serveBrandingCSS(w http.ResponseWriter, r *http.Request) {
+	css := ""
+	if tenantID := identity.PrincipalFromContext(r.Context()).TenantID; tenantID != "" {
+		if body, err := s.branding.BrandingCSS(r.Context(), tenantID); err == nil {
+			css = body
+		}
+	}
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=60")
+	// justified: styling response body; a failed write is the client's disconnect, non-actionable.
+	_, _ = w.Write([]byte(css))
+}
+
+// resolveBranding resolves the request tenant's branding profile, once per
+// request. A nil resolver, an anonymous request, or a resolver failure all
+// return the zero profile — the shell silently degrades to its default chrome
+// (the package has no logger; a broken branding store must never break the
+// operator console).
+func (s *Shell) resolveBranding(r *http.Request) portslib.BrandingProfile {
+	if s.branding == nil {
+		return portslib.BrandingProfile{}
+	}
+	tenantID := identity.PrincipalFromContext(r.Context()).TenantID
+	if tenantID == "" {
+		return portslib.BrandingProfile{}
+	}
+	profile, err := s.branding.ResolveBranding(r.Context(), tenantID)
+	if err != nil {
+		return portslib.BrandingProfile{}
+	}
+	return profile
 }
 
 func (s *Shell) findPage(urlPath string) (portslib.AdminPage, bool) {
@@ -410,9 +462,17 @@ type shellView struct {
 	Subject     string
 	TenantID    string
 	Sidebar     []portslib.SidebarSection
+
+	// Tenant branding, zero-valued when unbranded: DisplayName replaces the
+	// shell title, LogoURL/LogoAlt replace the brand mark and favicon, and
+	// HasBrandingCSS links the per-tenant stylesheet.
+	DisplayName    string
+	LogoURL        string
+	LogoAlt        string
+	HasBrandingCSS bool
 }
 
-func (s *Shell) view(r *http.Request, pageTitle string) shellView {
+func (s *Shell) view(r *http.Request, pageTitle string, profile portslib.BrandingProfile) shellView {
 	principal := identity.PrincipalFromContext(r.Context())
 	return shellView{
 		Title:       s.title,
@@ -422,6 +482,11 @@ func (s *Shell) view(r *http.Request, pageTitle string) shellView {
 		Subject:     principal.Subject,
 		TenantID:    principal.TenantID,
 		Sidebar:     s.SidebarSections(),
+
+		DisplayName:    profile.DisplayName,
+		LogoURL:        profile.LogoURL,
+		LogoAlt:        profile.LogoAlt,
+		HasBrandingCSS: profile.TenantID != "",
 	}
 }
 
@@ -504,7 +569,7 @@ type entityFormData struct {
 	EntityID       string
 }
 
-func (s *Shell) renderHome(w http.ResponseWriter, r *http.Request) {
+func (s *Shell) renderHome(w http.ResponseWriter, r *http.Request, profile portslib.BrandingProfile) {
 	modules := s.modulesSummary()
 	stats := homeStats{Areas: len(modules)}
 	for _, module := range modules {
@@ -515,7 +580,7 @@ func (s *Shell) renderHome(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, homeView(homeData{
-		shellView: s.view(r, "Overview"),
+		shellView: s.view(r, "Overview", profile),
 		Modules:   modules,
 		Stats:     stats,
 	}))
@@ -532,6 +597,7 @@ func (s *Shell) renderEntityList(
 	w http.ResponseWriter,
 	r *http.Request,
 	resource portslib.AdminResource,
+	profile portslib.BrandingProfile,
 ) {
 	config, err := encodeResource(resource)
 	if err != nil {
@@ -539,7 +605,7 @@ func (s *Shell) renderEntityList(
 		return
 	}
 	s.render(w, entityListView(entityListData{
-		shellView:      s.view(r, resource.PluralLabel),
+		shellView:      s.view(r, resource.PluralLabel, profile),
 		Resource:       resource,
 		ResourceConfig: config,
 	}))
@@ -550,6 +616,7 @@ func (s *Shell) renderEntityForm(
 	r *http.Request,
 	resource portslib.AdminResource,
 	id string,
+	profile portslib.BrandingProfile,
 ) {
 	config, err := encodeResource(resource)
 	if err != nil {
@@ -561,7 +628,7 @@ func (s *Shell) renderEntityForm(
 		title = "Edit " + resource.SingularLabel
 	}
 	s.render(w, entityFormView(entityFormData{
-		shellView:      s.view(r, title),
+		shellView:      s.view(r, title, profile),
 		Resource:       resource,
 		ResourceConfig: config,
 		EntityID:       id,

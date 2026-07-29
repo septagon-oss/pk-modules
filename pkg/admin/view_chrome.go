@@ -126,28 +126,63 @@ func hiddenProps(id string) contracts.ComponentProps {
 	return contracts.ComponentProps{ID: id, Hidden: true}
 }
 
-// layout renders the shared document. The chrome markup and class names are
-// byte-compatible with the previous template so the shell's identity CSS and
-// every existing test assertion keep holding; only the content area changes
-// per page.
+// effectiveTitle is the branded workspace name when the tenant set one, else
+// the configured shell title. One decision point for the <title> tag, the
+// header wordmark, and the brand link's aria-label.
+func effectiveTitle(view shellView) string {
+	if view.DisplayName != "" {
+		return view.DisplayName
+	}
+	return view.Title
+}
+
+// brandVisual is the mark inside the brand link: the tenant's uploaded logo
+// when branding resolved one, else the stock 3-span pk-brand-mark. One node
+// replaces the other — the chrome never renders both.
+func brandVisual(view shellView) g.Node {
+	if view.LogoURL != "" {
+		return h.Img(h.Class("pk-brand-logo"), h.Src(view.LogoURL), h.Alt(view.LogoAlt))
+	}
+	return h.Span(h.Class("pk-brand-mark"), g.Attr("aria-hidden", "true"), h.Span(), h.Span(), h.Span())
+}
+
+// faviconHref points the tab icon at the tenant logo when branding resolved
+// one, else at the embedded default mark.
+func faviconHref(view shellView) string {
+	if view.LogoURL != "" {
+		return view.LogoURL
+	}
+	return view.BasePath + "/static/favicon.svg"
+}
+
+// layout renders the shared document. The unbranded chrome markup and class
+// names stay byte-compatible with the previous template (plus the default
+// favicon link) so the shell's identity CSS and every existing test assertion
+// keep holding; tenant branding swaps the title, mark, favicon, and adds the
+// per-tenant stylesheet after _admin.css so overrides win the cascade.
 func layout(view shellView, content g.Node) g.Node {
+	title := effectiveTitle(view)
 	return h.Doctype(h.HTML(h.Lang("en"),
 		h.Head(
 			h.Meta(h.Charset("utf-8")),
 			h.Meta(h.Name("viewport"), h.Content("width=device-width,initial-scale=1,viewport-fit=cover")),
 			h.Meta(h.Name("color-scheme"), h.Content("light")),
-			h.TitleEl(g.Text(view.PageTitle+" · "+view.Title)),
+			h.TitleEl(g.Text(view.PageTitle+" · "+title)),
+			h.Link(h.Rel("icon"), h.Href(faviconHref(view))),
 			h.Link(h.Rel("stylesheet"), h.Href(view.BasePath+"/static/_admin.css")),
+			g.If(view.HasBrandingCSS,
+				h.Link(h.Rel("stylesheet"), h.Href(view.BasePath+"/static/_branding.css")),
+			),
 			h.Script(h.Type("application/json"), h.ID("pk-classnames"), g.Raw(classNamesJSON())),
 			h.Script(g.Attr("defer"), h.Src(view.BasePath+"/static/_admin.js")),
 		),
 		h.Body(
 			h.A(h.Class("pk-skip-link"), h.Href("#main-content"), g.Text("Skip to content")),
 			h.Header(h.Class("pk-admin-header"),
-				h.A(h.Class("pk-brand"), h.Href(view.BasePath), g.Attr("aria-label", view.Title+" overview"),
-					h.Span(h.Class("pk-brand-mark"), g.Attr("aria-hidden", "true"), h.Span(), h.Span(), h.Span()),
+				h.A(h.Class("pk-brand"), h.Href(view.BasePath), g.Attr("aria-label", title+" overview"),
+					brandVisual(view),
 					h.Span(
-						h.Strong(g.Text(view.Title)),
+						h.Strong(g.Text(title)),
 						h.Small(g.Text("Operator workspace")),
 					),
 				),
