@@ -57,7 +57,7 @@ func entityFormView(data entityFormData) g.Node {
 		h.Form(h.Class(layoutClasses.FormStack.Compile()), h.ID("pk-resource-form"), g.Attr("novalidate"),
 			web.Alert(atoms.AlertProps{
 				ComponentProps: hiddenProps("pk-form-status"),
-				Variant:        "error",
+				Tone:           "danger",
 			}),
 			h.FieldSet(h.Class(web.CardClasses().Compile()),
 				h.Legend(web.Heading(atoms.HeadingProps{Level: 4, Text: "Details"})),
@@ -66,16 +66,16 @@ func entityFormView(data entityFormData) g.Node {
 			h.Div(h.Class(layoutClasses.ActionsRow.Compile()),
 				web.Button(atoms.ButtonProps{
 					ComponentProps: contractProps("pk-form-submit", nil),
-					Text:           submit, Variant: "primary", Type: "submit",
+					Label:          submit, Variant: "primary", Tone: "neutral", Type: "submit",
 				}),
-				h.A(h.Class(web.ButtonClasses("secondary", "medium").Compile()), h.Href(listPath), g.Text("Cancel")),
+				h.A(h.Class(web.ButtonClasses("secondary", "md").Compile()), h.Href(listPath), g.Text("Cancel")),
 			),
 		),
 
 		h.Section(h.Class(layoutClasses.SecretStack.Compile()), h.ID("pk-secret-panel"),
 			g.Attr("aria-live", "polite"), g.Attr("hidden"),
 			web.Alert(atoms.AlertProps{
-				Variant: "success",
+				Tone:    "success",
 				Title:   "Created successfully",
 				Message: "This secret is shown once. Store it somewhere safe before leaving.",
 			}),
@@ -83,11 +83,11 @@ func entityFormView(data entityFormData) g.Node {
 				h.Code(h.Class(web.InlineCodeClasses().Compile()), h.ID("pk-secret-value")),
 				web.Button(atoms.ButtonProps{
 					ComponentProps: contractProps("pk-secret-copy", nil),
-					Text:           "Copy", Variant: "secondary",
+					Label:          "Copy", Variant: "secondary", Tone: "neutral",
 				}),
 			),
 			h.Div(
-				h.A(h.Class(web.ButtonClasses("primary", "medium").Compile()), h.Href(listPath),
+				h.A(h.Class(web.ButtonClasses("primary", "md").Compile()), h.Href(listPath),
 					g.Text("Return to "+resource.PluralLabel)),
 			),
 		),

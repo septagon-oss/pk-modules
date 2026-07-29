@@ -16,10 +16,16 @@ test: | $(TMPDIRS)
 vet: | $(TMPDIRS)
 	$(GO_ENV) go vet ./...
 
+# pk-guard: the composable guardrail vettool (safeerror, importboundary,
+# noclockindomain, buildtags), extracted from the PlatformKit estate. Built
+# from the pinned module so CI and clean clones run the identical guards.
+guard: | $(TMPDIRS)
+	$(GO_ENV) go tool pk-guard ./...
+
 staticcheck: | $(TMPDIRS)
 	$(GO_ENV) GOFLAGS=-buildvcs=false $(STATICCHECK) ./...
 
 race: | $(TMPDIRS)
 	$(GO_ENV) go test -race -count=1 ./...
 
-verify: test vet staticcheck race
+verify: test vet guard staticcheck race

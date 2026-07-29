@@ -23,12 +23,16 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/septagon-oss/pk-guard v0.0.0-20260728100356-71f0c2b50c6a // indirect
 	github.com/tdewolff/minify/v2 v2.24.13 // indirect
 	github.com/tdewolff/parse/v2 v2.8.13 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/tools v0.44.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
@@ -40,3 +44,5 @@ retract v0.0.0 // broken: contained local replace directives
 // correct commit attribution, so those tags no longer resolve to the content the
 // module proxy recorded. v0.6.0 is the same code with clean history.
 retract [v0.4.0, v0.5.1]
+
+tool github.com/septagon-oss/pk-guard/cmd/pk-guard

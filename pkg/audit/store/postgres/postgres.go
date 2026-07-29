@@ -59,6 +59,7 @@ func Open(driverName, dsn string) (*Store, error) {
 	}
 	s, err := New(db)
 	if err != nil {
+		// justified: constructor failure path; the close error is non-actionable.
 		_ = db.Close()
 		return nil, err
 	}

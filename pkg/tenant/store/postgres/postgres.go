@@ -58,6 +58,7 @@ func Open(driverName, dsn string) (*Store, error) {
 	}
 	s, err := New(db)
 	if err != nil {
+		// justified: constructor failure path; the close error is non-actionable.
 		_ = db.Close()
 		return nil, err
 	}
@@ -176,7 +177,10 @@ func (s *Store) Update(ctx context.Context, t *store.Tenant) error {
 		}
 		return fmt.Errorf("tenant/postgres: update: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("tenant/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}
@@ -190,7 +194,10 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("tenant/postgres: delete: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("tenant/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}

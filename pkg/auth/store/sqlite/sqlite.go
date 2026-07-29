@@ -54,6 +54,7 @@ func Open(driverName, dsn string) (*Store, error) {
 	}
 	s, err := New(db)
 	if err != nil {
+		// justified: constructor failure path; the close error is non-actionable.
 		_ = db.Close()
 		return nil, err
 	}
@@ -136,7 +137,10 @@ func (s *Store) Revoke(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("auth/sqlite: revoke: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("auth/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		// The session may already be revoked, or not exist. Disambiguate.
 		if _, getErr := s.Get(ctx, id); errors.Is(getErr, store.ErrNotFound) {

@@ -57,6 +57,7 @@ func Open(driverName, dsn string) (*Store, error) {
 	}
 	s, err := New(db)
 	if err != nil {
+		// justified: constructor failure path; the close error is non-actionable.
 		_ = db.Close()
 		return nil, err
 	}
@@ -230,7 +231,10 @@ func (s *Store) Update(ctx context.Context, c *store.Content) error {
 		}
 		return fmt.Errorf("content/postgres: update: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("content/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}
@@ -244,7 +248,10 @@ func (s *Store) Delete(ctx context.Context, tenantID, id string) error {
 	if err != nil {
 		return fmt.Errorf("content/postgres: delete: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("content/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}
@@ -264,7 +271,10 @@ func (s *Store) SetPublished(ctx context.Context, tenantID, id string, at *time.
 	if err != nil {
 		return fmt.Errorf("content/postgres: set published: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("content/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}

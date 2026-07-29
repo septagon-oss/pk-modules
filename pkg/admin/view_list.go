@@ -71,7 +71,7 @@ func entityListView(data entityListData) g.Node {
 			},
 			Actions: []atoms.ButtonProps{{
 				ComponentProps: contractProps("pk-resource-refresh", nil),
-				Text:           "Refresh", Variant: "secondary",
+				Label:          "Refresh", Variant: "secondary", Tone: "neutral",
 			}},
 			Table: molecules.TableProps{
 				ComponentProps: contractProps("pk-resource-table", map[string]string{

@@ -57,6 +57,7 @@ func Open(driverName, dsn string) (*Store, error) {
 	}
 	s, err := New(db)
 	if err != nil {
+		// justified: constructor failure path; the close error is non-actionable.
 		_ = db.Close()
 		return nil, err
 	}
@@ -200,7 +201,10 @@ func (s *Store) Revoke(ctx context.Context, tenantID, id string) error {
 	if err != nil {
 		return fmt.Errorf("apikey/sqlite: revoke: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("apikey/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		if _, getErr := s.Get(ctx, tenantID, id); errors.Is(getErr, store.ErrNotFound) {
 			return store.ErrNotFound

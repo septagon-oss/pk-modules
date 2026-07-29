@@ -58,6 +58,7 @@ func Open(driverName, dsn string) (*Store, error) {
 	}
 	s, err := New(db)
 	if err != nil {
+		// justified: constructor failure path; the close error is non-actionable.
 		_ = db.Close()
 		return nil, err
 	}
@@ -193,7 +194,10 @@ func (s *Store) Update(ctx context.Context, u *store.User) error {
 	if err != nil {
 		return classifyUniqueError(err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("user/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}
@@ -215,7 +219,10 @@ func (s *Store) UpdatePassHash(ctx context.Context, tenantID, id, passHash strin
 	if err != nil {
 		return fmt.Errorf("user/postgres: update pass_hash: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("user/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}
@@ -229,7 +236,10 @@ func (s *Store) Delete(ctx context.Context, tenantID, id string) error {
 	if err != nil {
 		return fmt.Errorf("user/postgres: delete: %w", err)
 	}
-	rows, _ := res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("user/postgres: rows affected: %w", err)
+	}
 	if rows == 0 {
 		return store.ErrNotFound
 	}
