@@ -39,30 +39,49 @@ func cssVarValue(t *testing.T, css, name string) string {
 }
 
 func TestDeriveCSSEmitsExactDefaultThemeVarNames(t *testing.T) {
+	colorVars := []string{
+		"--pk-color-accent-default",
+		"--pk-color-accent-hover",
+		"--pk-color-accent-on",
+		"--pk-color-signal",
+		"--pk-color-focus",
+	}
+	fontVars := []string{"--pk-font-body", "--pk-font-display"}
 	tests := []struct {
-		name    string
-		primary string
-		fontKey string
-		want    []string
-		reject  []string
+		name      string
+		primary   string
+		fontKey   string
+		want      []string
+		reject    []string
+		wantCount int
 	}{
 		{
-			name:    "color only overrides the five color vars and no fonts",
-			primary: "#14b8a6",
-			want: []string{
-				"--pk-color-accent-default",
-				"--pk-color-accent-hover",
-				"--pk-color-accent-on",
-				"--pk-color-signal",
-				"--pk-color-focus",
-			},
-			reject: []string{"--pk-font-"},
+			name:      "color only overrides exactly the five color vars and no fonts",
+			primary:   "#14b8a6",
+			want:      colorVars,
+			reject:    []string{"--pk-font-"},
+			wantCount: 5,
 		},
 		{
-			name:    "font only overrides body and display and no colors",
-			fontKey: "editorial",
-			want:    []string{"--pk-font-body", "--pk-font-display"},
-			reject:  []string{"--pk-color-"},
+			name:      "three digit shorthand derives and canonicalizes to rrggbb",
+			primary:   "#abc",
+			want:      append(append([]string{}, colorVars...), "#aabbcc"),
+			reject:    []string{"--pk-font-"},
+			wantCount: 5,
+		},
+		{
+			name:      "font only overrides exactly body and display and no colors",
+			fontKey:   "editorial",
+			want:      fontVars,
+			reject:    []string{"--pk-color-"},
+			wantCount: 2,
+		},
+		{
+			name:      "color and font combined emits exactly all seven vars",
+			primary:   "#14b8a6",
+			fontKey:   "plex",
+			want:      append(append([]string{}, colorVars...), fontVars...),
+			wantCount: 7,
 		},
 	}
 	for _, tt := range tests {
@@ -81,40 +100,59 @@ func TestDeriveCSSEmitsExactDefaultThemeVarNames(t *testing.T) {
 					t.Errorf("css must not contain %s:\n%s", reject, css)
 				}
 			}
+			if got := strings.Count(css, "--pk-"); got != tt.wantCount {
+				t.Errorf("css emits %d custom properties, want exactly %d:\n%s", got, tt.wantCount, css)
+			}
 		})
 	}
 }
 
 func TestDeriveCSSSignalAndFocusAreTheRawPrimary(t *testing.T) {
-	css, err := branding.DeriveCSS("#14b8a6", "")
-	if err != nil {
-		t.Fatalf("DeriveCSS: %v", err)
+	tests := []struct {
+		name    string
+		primary string
+		want    string
+	}{
+		{name: "six digit primary passes through", primary: "#14b8a6", want: "#14b8a6"},
+		{name: "three digit shorthand canonicalizes", primary: "#abc", want: "#aabbcc"},
 	}
-	if got := cssVarValue(t, css, "--pk-color-signal"); got != "#14b8a6" {
-		t.Errorf("signal = %q, want raw primary #14b8a6", got)
-	}
-	if got := cssVarValue(t, css, "--pk-color-focus"); got != "#14b8a6" {
-		t.Errorf("focus = %q, want raw primary #14b8a6", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			css, err := branding.DeriveCSS(tt.primary, "")
+			if err != nil {
+				t.Fatalf("DeriveCSS(%q, \"\"): %v", tt.primary, err)
+			}
+			if got := cssVarValue(t, css, "--pk-color-signal"); got != tt.want {
+				t.Errorf("signal = %q, want raw primary %q", got, tt.want)
+			}
+			if got := cssVarValue(t, css, "--pk-color-focus"); got != tt.want {
+				t.Errorf("focus = %q, want raw primary %q", got, tt.want)
+			}
+		})
 	}
 }
 
 func TestDeriveCSSAccentPairMeetsWCAGAA(t *testing.T) {
 	// #f5e642 is the correction property: a light primary must still yield an
 	// accessible emitted pair, whichever branch of the policy produced it.
-	for _, primary := range []string{"#14b8a6", "#f5e642"} {
+	// Hover is held to the same bar: the pair guarantee must survive the
+	// hover derivation on whichever branch fired.
+	for _, primary := range []string{"#14b8a6", "#f5e642", "#abc"} {
 		t.Run(primary, func(t *testing.T) {
 			css, err := branding.DeriveCSS(primary, "")
 			if err != nil {
 				t.Fatalf("DeriveCSS(%q, \"\"): %v", primary, err)
 			}
-			accent := cssVarValue(t, css, "--pk-color-accent-default")
 			on := cssVarValue(t, css, "--pk-color-accent-on")
-			ratio, err := tokens.ContrastRatio(on, accent)
-			if err != nil {
-				t.Fatalf("ContrastRatio(%q, %q): %v", on, accent, err)
-			}
-			if ratio < tokens.WCAGAAContrast {
-				t.Errorf("contrast(%s on %s) = %.3f, want >= %.1f", on, accent, ratio, tokens.WCAGAAContrast)
+			for _, accentVar := range []string{"--pk-color-accent-default", "--pk-color-accent-hover"} {
+				accent := cssVarValue(t, css, accentVar)
+				ratio, err := tokens.ContrastRatio(on, accent)
+				if err != nil {
+					t.Fatalf("ContrastRatio(%q, %q): %v", on, accent, err)
+				}
+				if ratio < tokens.WCAGAAContrast {
+					t.Errorf("contrast(%s on %s=%s) = %.3f, want >= %.1f", on, accentVar, accent, ratio, tokens.WCAGAAContrast)
+				}
 			}
 		})
 	}
@@ -192,10 +230,11 @@ func TestDeriveLayerProducesATenantTokenLayer(t *testing.T) {
 // TestInkFallbackStaysUnreachableUnderCurrentConstants sweeps a coarse RGB
 // grid (16-step stride plus 255 on every channel, including the worst case
 // #ffffff) and asserts the white branch of the accent policy wins for every
-// primary. palette.go documents the ink fallback as unreachable while
-// darkenStep = 5% and maxDarkenSteps = 12 hold; if a constant change ever
-// flips that, this test fails so the constants and the policy documentation
-// get revisited together instead of the behavior shifting silently.
+// primary, and that the hover/on pair holds AA on the branch that fired.
+// palette.go documents the ink fallback as unreachable while darkenStep = 5%
+// and maxDarkenSteps = 12 hold; if a constant change ever flips that, this
+// test fails so the constants and the policy documentation get revisited
+// together instead of the behavior shifting silently.
 func TestInkFallbackStaysUnreachableUnderCurrentConstants(t *testing.T) {
 	channelValues := make([]int, 0, 17)
 	for v := 0; v < 256; v += 16 {
@@ -210,14 +249,30 @@ func TestInkFallbackStaysUnreachableUnderCurrentConstants(t *testing.T) {
 				if err != nil || !ok {
 					t.Fatalf("DeriveLayer(%q, \"\") = ok=%v, err=%v", primary, ok, err)
 				}
-				token, found, err := layer.Tokens.Lookup("color.accent.on")
+				on, found, err := layer.Tokens.Lookup("color.accent.on")
 				if err != nil || !found {
 					t.Fatalf("Lookup(color.accent.on) for %q: found=%v, err=%v", primary, found, err)
 				}
-				if token.Value != "#ffffff" {
+				if on.Value != "#ffffff" {
 					t.Fatalf("ink fallback became reachable: accent.on = %v for primary %s; "+
 						"did darkenStep or maxDarkenSteps change? Revisit the reachability notes in palette.go",
-						token.Value, primary)
+						on.Value, primary)
+				}
+				hover, found, err := layer.Tokens.Lookup("color.accent.hover")
+				if err != nil || !found {
+					t.Fatalf("Lookup(color.accent.hover) for %q: found=%v, err=%v", primary, found, err)
+				}
+				hoverHex, isString := hover.Value.(string)
+				if !isString {
+					t.Fatalf("accent.hover for %q is %T, want string hex", primary, hover.Value)
+				}
+				ratio, err := tokens.ContrastRatio("#ffffff", hoverHex)
+				if err != nil {
+					t.Fatalf("ContrastRatio(#ffffff, %q) for %q: %v", hoverHex, primary, err)
+				}
+				if ratio < tokens.WCAGAAContrast {
+					t.Fatalf("hover pair below AA: contrast(#ffffff on %s) = %.3f for primary %s, want >= %.1f",
+						hoverHex, ratio, primary, tokens.WCAGAAContrast)
 				}
 			}
 		}

@@ -26,7 +26,11 @@ package branding
 //     4.5:1 against either white or ink (#111827), never silently emitting
 //     an inaccessible pair. Contrast is always measured on the quantized hex
 //     value that will be emitted, never on intermediate floats.
-//   - color.accent.hover: accent.default darkened a further 8%.
+//   - color.accent.hover: accent.default darkened a further 8% when
+//     accent.on is white, since a darker accent only gains contrast under
+//     light text. On the defensive ink branch hover stays exactly at
+//     accent.default: text there is dark, so darkening further would erode
+//     the pair contrast the fallback guard just enforced.
 //   - color.signal and color.focus: the raw primary, canonicalized to
 //     lowercase #rrggbb.
 //   - font.body and font.display: curated stacks only; the empty key means
@@ -54,9 +58,12 @@ const (
 	tokenNamespace = "pk"
 	// darkenStep is the per-step darkening fraction of the original primary.
 	darkenStep = 0.05
-	// maxDarkenSteps caps correction at 60% total darkening.
+	// maxDarkenSteps is the step threshold past which the ink fallback
+	// becomes eligible; correction deliberately keeps darkening beyond it
+	// until either accent.on candidate reaches AA (see correctedAccent).
 	maxDarkenSteps = 12
-	// hoverDarken is the extra darkening applied to derive the hover accent.
+	// hoverDarken is the extra darkening that derives the hover accent on
+	// the white-text branch; the ink branch keeps hover at accent.default.
 	hoverDarken = 0.08
 	// inkHex is the defensive accent.on fallback for primaries that cannot
 	// reach AA contrast against white within maxDarkenSteps. Unreachable
@@ -100,7 +107,14 @@ func DeriveLayer(primaryHex, fontKey string) (themes.TokenLayer, bool, error) {
 			return themes.TokenLayer{}, false, err
 		}
 		accentR, accentG, accentB, on := correctedAccent(r, g, b)
-		hoverR, hoverG, hoverB := darken(accentR, accentG, accentB, hoverDarken)
+		// Hover darkens the accent only under white text, where darker means
+		// more contrast. On the (defensive) ink branch the text is dark, so
+		// extra darkening would reduce the hover/on ratio below the pair
+		// correctedAccent just guaranteed; hover stays at accent.default.
+		hoverR, hoverG, hoverB := accentR, accentG, accentB
+		if on == whiteHex {
+			hoverR, hoverG, hoverB = darken(accentR, accentG, accentB, hoverDarken)
+		}
 		primary := toHex(r, g, b)
 		for path, value := range map[string]string{
 			"color.accent.default": toHex(accentR, accentG, accentB),
