@@ -12,6 +12,7 @@ package branding_test
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -19,6 +20,7 @@ import (
 	corehealth "github.com/septagon-oss/pk-core/pkg/observability/health"
 
 	"github.com/septagon-oss/pk-modules/pkg/branding"
+	"github.com/septagon-oss/pk-modules/pkg/branding/store"
 
 	_ "modernc.org/sqlite"
 )
@@ -46,6 +48,9 @@ func TestNewModuleWithStoreSucceeds(t *testing.T) {
 	m := newModule(t)
 	if m.Service() == nil {
 		t.Fatalf("Service() is nil")
+	}
+	if m.Store() == nil {
+		t.Fatalf("Store() is nil")
 	}
 }
 
@@ -103,6 +108,21 @@ func (f *fakeHealthRegistrar) Register(name string, checker corehealth.Checker) 
 	return nil
 }
 
+// erroringStore is a minimal store.Store whose Get always fails with a fixed
+// error, used to drive the health checker's unhealthy branch — a real
+// failure (unlike store.ErrNotFound) must fail the check.
+type erroringStore struct {
+	getErr error
+}
+
+func (e *erroringStore) Get(ctx context.Context, tenantID string) (*store.Record, error) {
+	return nil, e.getErr
+}
+
+func (e *erroringStore) Upsert(ctx context.Context, r *store.Record) error {
+	return nil
+}
+
 func TestNewModuleRegistersHealthCheck(t *testing.T) {
 	t.Parallel()
 	reg := &fakeHealthRegistrar{}
@@ -116,6 +136,31 @@ func TestNewModuleRegistersHealthCheck(t *testing.T) {
 	}
 	if err := reg.checker.Check(context.Background()); err != nil {
 		t.Fatalf("checker.Check on empty store = %v, want nil", err)
+	}
+}
+
+// TestNewModuleHealthCheckFailsOnStoreError proves registerHealth only
+// treats store.ErrNotFound as healthy: a real store error (connection
+// failure and the like) must fail the check, not be swallowed alongside it.
+func TestNewModuleHealthCheckFailsOnStoreError(t *testing.T) {
+	t.Parallel()
+	reg := &fakeHealthRegistrar{}
+	wantErr := errors.New("branding/sqlite: connection refused")
+	m, err := branding.NewModule(
+		branding.WithStore(&erroringStore{getErr: wantErr}),
+		branding.WithHealthRegistrar(reg),
+	)
+	if err != nil {
+		t.Fatalf("NewModule: %v", err)
+	}
+	if m.Store() == nil {
+		t.Fatalf("Store() is nil")
+	}
+	if reg.checker == nil {
+		t.Fatalf("registered checker is nil")
+	}
+	if err := reg.checker.Check(context.Background()); !errors.Is(err, wantErr) {
+		t.Fatalf("checker.Check = %v, want %v", err, wantErr)
 	}
 }
 

@@ -6,17 +6,20 @@ package branding_test
 
 // service_test.go validates the default Service against its public API:
 // ResolveBranding/BrandingCSS satisfy the portslib.BrandingResolver contract
-// on an empty store, Save's validation table (display name, delegated
-// color/font, and logo size + content sniffing), the SetupCompletedAt
-// stamping rule, Skip's fallback-name-only write, and the derived LogoURL and
-// BrandingCSS outputs. Tests live in branding_test to exercise the package
-// the way callers see it.
+// on an empty store, Save's validation table (display name — including
+// multibyte rune-counted boundaries — delegated color/font, and logo size +
+// content sniffing), the SetupCompletedAt stamping rule, Skip's
+// fallback-name-only write, Logo's uniform-404 sentinel, the derived LogoURL
+// and BrandingCSS outputs, and the blank-tenant-ID guard shared by every
+// public method. Tests live in branding_test to exercise the package the way
+// callers see it.
 //
 // ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
 // Convention: C-14 (every Go file declares its purpose).
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -79,6 +82,47 @@ func TestResolveBrandingEmptyStoreReturnsZeroProfile(t *testing.T) {
 	}
 }
 
+// TestEmptyTenantIDRejectedByEveryPublicMethod pins that every public method
+// on Service shares one guard: a blank (or whitespace-only) tenant ID always
+// errors, and — because the guard runs first — never reaches the store.
+func TestEmptyTenantIDRejectedByEveryPublicMethod(t *testing.T) {
+	t.Parallel()
+	svc, _ := newTestService(t)
+	ctx := context.Background()
+
+	cases := []struct {
+		name string
+		call func() error
+	}{
+		{"ResolveBranding", func() error {
+			_, err := svc.ResolveBranding(ctx, "   ")
+			return err
+		}},
+		{"BrandingCSS", func() error {
+			_, err := svc.BrandingCSS(ctx, "")
+			return err
+		}},
+		{"Save", func() error {
+			return svc.Save(ctx, "", branding.SaveParams{DisplayName: "Acme Ops"})
+		}},
+		{"Skip", func() error {
+			return svc.Skip(ctx, "  ", "Acme Ops")
+		}},
+		{"Logo", func() error {
+			_, _, err := svc.Logo(ctx, "")
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if err := tc.call(); err == nil {
+				t.Fatalf("%s with a blank tenant ID should error", tc.name)
+			}
+		})
+	}
+}
+
 func TestSaveDisplayNameValidation(t *testing.T) {
 	t.Parallel()
 
@@ -90,8 +134,13 @@ func TestSaveDisplayNameValidation(t *testing.T) {
 		{"ok", "Acme Ops", false},
 		{"trims to empty", "   ", true},
 		{"empty", "", true},
-		{"exactly max length ok", strings.Repeat("a", 120), false},
-		{"over max length rejected", strings.Repeat("a", 121), true},
+		{"exactly max length ok (ascii)", strings.Repeat("a", 120), false},
+		{"over max length rejected (ascii)", strings.Repeat("a", 121), true},
+		// The bound is counted in runes, not bytes: "名" is a 3-byte UTF-8
+		// rune, so 120 of them is ~360 bytes but exactly 120 characters — a
+		// byte-counted check would wrongly reject this.
+		{"exactly max length ok (multibyte, 120 runes)", strings.Repeat("名", 120), false},
+		{"over max length rejected (multibyte, 121 runes)", strings.Repeat("名", 121), true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -159,6 +208,9 @@ func TestSaveLogoValidation(t *testing.T) {
 	oversized := make([]byte, (1<<20)+1)
 	copy(oversized, pngBytes)
 
+	exactlyMax := make([]byte, 1<<20)
+	copy(exactlyMax, pngBytes)
+
 	cases := []struct {
 		name        string
 		data        []byte
@@ -173,6 +225,7 @@ func TestSaveLogoValidation(t *testing.T) {
 		{"png declared as jpeg rejected", pngBytes, "image/jpeg", true},
 		{"random bytes rejected", []byte("this is not an image at all, just text"), "image/png", true},
 		{"unsupported declared type rejected", pngBytes, "image/gif", true},
+		{"exactly max size accepted", exactlyMax, "image/png", false},
 		{"oversized logo rejected", oversized, "image/png", true},
 	}
 	for _, tc := range cases {
@@ -315,6 +368,57 @@ func TestSkipRequiresFallbackName(t *testing.T) {
 	if err := svc.Skip(context.Background(), "tenant-skip-empty", "   "); err == nil {
 		t.Fatalf("Skip with blank fallback name should error")
 	}
+}
+
+// TestLogo covers Service.Logo's three outcomes: no record at all, a record
+// with no logo, and a record with one. The first two must both surface
+// store.ErrNotFound — that is the whole point of the seam, so the HTTP
+// handler (Task 5) can 404 uniformly without distinguishing them.
+func TestLogo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no record", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newTestService(t)
+		if _, _, err := svc.Logo(context.Background(), "tenant"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("Logo err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("record without logo", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newTestService(t)
+		ctx := context.Background()
+		if err := svc.Save(ctx, "tenant", branding.SaveParams{DisplayName: "Acme Ops"}); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if _, _, err := svc.Logo(ctx, "tenant"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("Logo err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("record with logo", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newTestService(t)
+		ctx := context.Background()
+		if err := svc.Save(ctx, "tenant", branding.SaveParams{
+			DisplayName:     "Acme Ops",
+			LogoData:        pngBytes,
+			LogoContentType: "image/png",
+		}); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		data, contentType, err := svc.Logo(ctx, "tenant")
+		if err != nil {
+			t.Fatalf("Logo: %v", err)
+		}
+		if string(data) != string(pngBytes) {
+			t.Fatalf("Logo data = %v, want %v", data, pngBytes)
+		}
+		if contentType != "image/png" {
+			t.Fatalf("Logo content type = %q, want %q", contentType, "image/png")
+		}
+	})
 }
 
 func TestResolveBrandingLogoURL(t *testing.T) {

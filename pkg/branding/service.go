@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/septagon-oss/pk-modules/pkg/branding/store"
 	"github.com/septagon-oss/pk-modules/pkg/portslib"
@@ -35,13 +36,23 @@ import (
 const (
 	// maxLogoBytes bounds the accepted logo upload size (1 MiB).
 	maxLogoBytes = 1 << 20
-	// maxDisplayNameLen bounds the tenant display name.
+	// maxDisplayNameLen bounds the tenant display name, counted in runes (not
+	// bytes) so multibyte scripts get the same 120-character budget as ASCII.
 	maxDisplayNameLen = 120
 	// logoRoutePath is the servable logo route the HTTP handler (Task 5) will
 	// mount. LogoURL is derived here so BrandingProfile never carries raw
 	// bytes.
 	logoRoutePath = "/api/v1/branding/logo"
 )
+
+// acceptedLogoContentTypes lists the declared content types validateLogo
+// accepts, shared between the switch statement and its error message so the
+// two can never drift apart.
+var acceptedLogoContentTypes = []string{"image/png", "image/jpeg", "image/webp", "image/svg+xml"}
+
+// errTenantIDRequired is the sentinel every public Service method returns
+// when called with a blank tenant ID.
+var errTenantIDRequired = errors.New("branding: tenant id is required")
 
 // Compile-time proof Service satisfies the port the branding module provides
 // (Effective Go "interface checks").
@@ -72,12 +83,22 @@ type SaveParams struct {
 	LogoContentType string
 }
 
+// requireTenantID trims tenantID and rejects it if blank, centralizing the
+// guard every public method on Service enforces before touching the store.
+func requireTenantID(tenantID string) (string, error) {
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return "", errTenantIDRequired
+	}
+	return tenantID, nil
+}
+
 // ResolveBranding returns the tenant's branding profile, or a zero profile
 // (SetupComplete=false) and a nil error when no record exists yet.
 func (s *Service) ResolveBranding(ctx context.Context, tenantID string) (portslib.BrandingProfile, error) {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return portslib.BrandingProfile{}, errors.New("branding: tenant id is required")
+	tenantID, err := requireTenantID(tenantID)
+	if err != nil {
+		return portslib.BrandingProfile{}, err
 	}
 	rec, err := s.store.Get(ctx, tenantID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -93,9 +114,9 @@ func (s *Service) ResolveBranding(ctx context.Context, tenantID string) (portsli
 // to DeriveCSS. It returns "" when the tenant has no record, or a record with
 // no color/font overrides.
 func (s *Service) BrandingCSS(ctx context.Context, tenantID string) (string, error) {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return "", errors.New("branding: tenant id is required")
+	tenantID, err := requireTenantID(tenantID)
+	if err != nil {
+		return "", err
 	}
 	rec, err := s.store.Get(ctx, tenantID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -107,17 +128,34 @@ func (s *Service) BrandingCSS(ctx context.Context, tenantID string) (string, err
 	return DeriveCSS(rec.PrimaryColor, rec.FontKey)
 }
 
+// Logo returns a tenant's raw logo bytes and declared content type. It
+// returns store.ErrNotFound both when the tenant has no branding record at
+// all and when the record exists but carries no logo, so the HTTP handler
+// (Task 5) can 404 uniformly without distinguishing the two cases. This is
+// the retrieval seam Pro overrides to serve object-storage-backed logos
+// instead of inline blobs.
+func (s *Service) Logo(ctx context.Context, tenantID string) ([]byte, string, error) {
+	tenantID, err := requireTenantID(tenantID)
+	if err != nil {
+		return nil, "", err
+	}
+	rec, err := s.store.Get(ctx, tenantID)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(rec.LogoData) == 0 {
+		return nil, "", store.ErrNotFound
+	}
+	return rec.LogoData, rec.LogoContentType, nil
+}
+
 // Save validates and persists a tenant's branding choices, loading any
 // existing record first so a Save without a new logo keeps the old one. It
 // stamps SetupCompletedAt the first time a tenant successfully saves, and
-// leaves it untouched on every later Save.
+// leaves it untouched on every later Save. Every field is validated before
+// the store is touched, so an invalid submission never costs a round trip.
 func (s *Service) Save(ctx context.Context, tenantID string, params SaveParams) error {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return errors.New("branding: tenant id is required")
-	}
-
-	rec, err := s.loadOrNew(ctx, tenantID)
+	tenantID, err := requireTenantID(tenantID)
 	if err != nil {
 		return err
 	}
@@ -133,10 +171,19 @@ func (s *Service) Save(ctx context.Context, tenantID string, params SaveParams) 
 		return err
 	}
 
-	if len(params.LogoData) > 0 {
+	hasNewLogo := len(params.LogoData) > 0
+	if hasNewLogo {
 		if err := validateLogo(params.LogoData, params.LogoContentType); err != nil {
 			return err
 		}
+	}
+
+	rec, err := s.loadOrNew(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+
+	if hasNewLogo {
 		rec.LogoData = params.LogoData
 		rec.LogoContentType = strings.TrimSpace(params.LogoContentType)
 		rec.LogoAlt = strings.TrimSpace(params.LogoAlt)
@@ -156,9 +203,9 @@ func (s *Service) Save(ctx context.Context, tenantID string, params SaveParams) 
 // fallbackName as the display name and leaving every other field empty —
 // unlike Save, Skip does not preserve a prior record's logo or palette.
 func (s *Service) Skip(ctx context.Context, tenantID, fallbackName string) error {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return errors.New("branding: tenant id is required")
+	tenantID, err := requireTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	displayName, err := validateDisplayName(fallbackName)
 	if err != nil {
@@ -192,13 +239,15 @@ func stampSetupComplete(rec *store.Record) {
 	rec.SetupCompletedAt = &now
 }
 
-// validateDisplayName trims and bounds a display name.
+// validateDisplayName trims and bounds a display name. The bound is counted
+// in runes, not bytes: a 120-character name in a multibyte script (e.g.
+// Japanese) must be accepted on the same terms as 120 ASCII characters.
 func validateDisplayName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", errors.New("branding: display name is required")
 	}
-	if len(name) > maxDisplayNameLen {
+	if utf8.RuneCountInString(name) > maxDisplayNameLen {
 		return "", fmt.Errorf("branding: display name exceeds %d characters", maxDisplayNameLen)
 	}
 	return name, nil
@@ -230,7 +279,8 @@ func validateLogo(data []byte, declared string) error {
 		}
 		return nil
 	default:
-		return fmt.Errorf("branding: unsupported logo content type %q", declared)
+		return fmt.Errorf("branding: unsupported logo content type %q (accepted: %s)",
+			declared, strings.Join(acceptedLogoContentTypes, ", "))
 	}
 }
 

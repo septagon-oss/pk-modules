@@ -30,6 +30,13 @@ import (
 )
 
 // Module metadata constants used by both the catalog and admin shell.
+//
+// ModuleVersion looks stranded (nothing in this package reads it directly)
+// but is not dead: the OSS `pk explain modules` catalog (pk-tools
+// cmd/pk/explain.go) reads every module's exported ModuleVersion const by
+// name to build its listing, the same way it already does for
+// tenant.ModuleVersion, user.ModuleVersion, and the other reference modules.
+// Keep it even though no code in this repo references it.
 const (
 	ModuleID          = "branding_management"
 	ModuleName        = "Branding"
@@ -196,3 +203,7 @@ func (m *Module) Migrations() fs.FS {
 // Service returns the Service backed by this module's store. Pro can embed
 // and override.
 func (m *Module) Service() *Service { return m.svc }
+
+// Store returns the underlying Store so Pro can implement object-storage-
+// backed logos or wrap with auditing.
+func (m *Module) Store() store.Store { return m.store }
