@@ -43,6 +43,31 @@ var (
 	webpBytes = append([]byte("RIFF\x00\x00\x00\x00WEBPVP"), []byte("8 restofwebpdata")...)
 )
 
+// maxLogoBytesForTest mirrors the unexported maxLogoBytes bound in
+// service.go (1 MiB). It cannot be imported here — these tests live in the
+// external branding_test package — so it is pinned once, here, as the single
+// source both service_test.go's and handler_test.go's oversized/exactly-max
+// logo fixtures build from; a change to the real constant is easy to notice
+// and follow from this one spot.
+const maxLogoBytesForTest = 1 << 20
+
+// exactlyMaxSizeLogoBytes and oversizedLogoBytes are PNG-prefixed fixtures at
+// the maxLogoBytesForTest boundary — the former exactly at the limit (must be
+// accepted), the latter one byte past it (must be rejected on size, not on
+// content sniffing, hence the real PNG signature prefix on both).
+var (
+	exactlyMaxSizeLogoBytes = padLogoBytes(pngBytes, maxLogoBytesForTest)
+	oversizedLogoBytes      = padLogoBytes(pngBytes, maxLogoBytesForTest+1)
+)
+
+// padLogoBytes returns data extended with zero bytes to exactly size, so the
+// result still starts with data's real magic-byte signature.
+func padLogoBytes(data []byte, size int) []byte {
+	out := make([]byte, size)
+	copy(out, data)
+	return out
+}
+
 const validSVG = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>`
 
 // newStore returns a fresh sqlite-backed store.Store on an isolated on-disk
@@ -205,12 +230,6 @@ func TestSavePaletteValidationDelegatesToPalette(t *testing.T) {
 func TestSaveLogoValidation(t *testing.T) {
 	t.Parallel()
 
-	oversized := make([]byte, (1<<20)+1)
-	copy(oversized, pngBytes)
-
-	exactlyMax := make([]byte, 1<<20)
-	copy(exactlyMax, pngBytes)
-
 	cases := []struct {
 		name        string
 		data        []byte
@@ -225,8 +244,8 @@ func TestSaveLogoValidation(t *testing.T) {
 		{"png declared as jpeg rejected", pngBytes, "image/jpeg", true},
 		{"random bytes rejected", []byte("this is not an image at all, just text"), "image/png", true},
 		{"unsupported declared type rejected", pngBytes, "image/gif", true},
-		{"exactly max size accepted", exactlyMax, "image/png", false},
-		{"oversized logo rejected", oversized, "image/png", true},
+		{"exactly max size accepted", exactlyMaxSizeLogoBytes, "image/png", false},
+		{"oversized logo rejected", oversizedLogoBytes, "image/png", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

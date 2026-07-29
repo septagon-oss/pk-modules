@@ -132,14 +132,24 @@ func sameOrigin(r *http.Request) bool {
 // records that the tenant explicitly skipped setup, using the submitted (or
 // fallback) display name. Both redirect back to the admin branding page on
 // completion — 303 with ?saved=1 on success, ?error=<message> on failure —
-// mirroring the starter app's login-form flow. An unrecognized action is a
-// malformed request, not a form outcome, so it gets a plain 400 rather than
-// a redirect.
+// mirroring the starter app's login-form flow. A ParseMultipartForm failure
+// takes that same redirect path: it can arise from an ordinary submission —
+// a client that dropped the connection mid-upload, or a truncated/malformed
+// multipart body from a flaky network — which is a form outcome the admin
+// page should render exactly like any other save error. An unrecognized
+// action cannot arise from the rendered form at all — only from a
+// hand-crafted request — so it is treated as a malformed request, not a form
+// outcome, and gets a plain 400 rather than a redirect.
 func (h *Handler) postProfile(w http.ResponseWriter, r *http.Request, tenantID string) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request rejected", http.StatusForbidden)
 		return
 	}
+	// maxMemory (2 MiB) is deliberately 2×maxLogoBytes: an at-the-limit,
+	// 1-MiB logo part is read fully into memory with headroom to spare, so
+	// ParseMultipartForm never spills it to a temp file on disk just because
+	// the small text fields and multipart framing around it pushed the total
+	// past a tighter bound.
 	if err := r.ParseMultipartForm(2 << 20); err != nil {
 		h.redirectError(w, r, err)
 		return

@@ -35,20 +35,6 @@ import (
 	"github.com/septagon-oss/pk-modules/pkg/branding"
 )
 
-// maxLogoBytesForTest mirrors the unexported maxLogoBytes bound in
-// service.go (1 MiB). It cannot be imported here — this file is in the
-// external branding_test package — so it is pinned as a literal and
-// commented so a change to the real constant is easy to notice and follow.
-const maxLogoBytesForTest = 1 << 20
-
-// oversizedPNGBytes carries a real PNG signature so it would pass content
-// sniffing, padded past maxLogoBytesForTest so Save's size check — not the
-// sniff check — is what rejects it.
-var oversizedPNGBytes = append(
-	append([]byte{}, pngBytes...),
-	bytes.Repeat([]byte{0}, maxLogoBytesForTest)...,
-)
-
 // profileWire mirrors the JSON shape the handler emits, decoded independently
 // of the handler's own (unexported) wire type so the test proves the actual
 // bytes on the wire, not an internal struct's field names.
@@ -368,7 +354,7 @@ func TestHandlerPostSaveWithOversizedLogoRejected(t *testing.T) {
 	mux := newTestMux(t, svc, "/admin")
 
 	fields := map[string]string{"action": "save", "display_name": "Acme Corp"}
-	fp := &filePart{filename: "logo.png", contentType: "image/png", data: oversizedPNGBytes}
+	fp := &filePart{filename: "logo.png", contentType: "image/png", data: oversizedLogoBytes}
 	req := withPrincipal(newMultipartRequest(t, "/api/v1/branding", fields, fp), "tenant-oversize")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -456,6 +442,48 @@ func TestHandlerGetLogoServesStoredBytesWithSecurityHeaders(t *testing.T) {
 	}
 	if got := rec.Body.Bytes(); !bytes.Equal(got, pngBytes) {
 		t.Fatalf("logo body = %x, want %x", got, pngBytes)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("Content-Type = %q, want image/png", ct)
+	}
+	wantHeaders := map[string]string{
+		"X-Content-Type-Options":  "nosniff",
+		"Content-Security-Policy": "default-src 'none'",
+		"Referrer-Policy":         "no-referrer",
+		"Cache-Control":           "private, max-age=300",
+	}
+	for k, want := range wantHeaders {
+		if got := rec.Header().Get(k); got != want {
+			t.Fatalf("header %s = %q, want %q", k, got, want)
+		}
+	}
+}
+
+func TestHandlerHeadLogoServesHeadersWithZeroBody(t *testing.T) {
+	t.Parallel()
+	svc, _ := newTestService(t)
+	mux := newTestMux(t, svc, "/admin")
+
+	if err := svc.Save(context.Background(), "tenant-logo-head", branding.SaveParams{
+		DisplayName:     "Acme Corp",
+		LogoData:        pngBytes,
+		LogoContentType: "image/png",
+	}); err != nil {
+		t.Fatalf("seed Save: %v", err)
+	}
+
+	req := withPrincipal(httptest.NewRequest(http.MethodHead, "/api/v1/branding/logo", nil), "tenant-logo-head")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	// HEAD must carry every header a GET would, but no body: the handler only
+	// writes bytes on http.MethodGet, and this is the one branch that path
+	// leaves untested.
+	if got := rec.Body.Len(); got != 0 {
+		t.Fatalf("HEAD body length = %d, want 0", got)
 	}
 	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
 		t.Fatalf("Content-Type = %q, want image/png", ct)
