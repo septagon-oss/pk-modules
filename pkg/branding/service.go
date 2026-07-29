@@ -39,9 +39,8 @@ const (
 	// maxDisplayNameLen bounds the tenant display name, counted in runes (not
 	// bytes) so multibyte scripts get the same 120-character budget as ASCII.
 	maxDisplayNameLen = 120
-	// logoRoutePath is the servable logo route the HTTP handler (Task 5) will
-	// mount. LogoURL is derived here so BrandingProfile never carries raw
-	// bytes.
+	// logoRoutePath is the servable logo route handler.go mounts. LogoURL is
+	// derived here so BrandingProfile never carries raw bytes.
 	logoRoutePath = "/api/v1/branding/logo"
 )
 

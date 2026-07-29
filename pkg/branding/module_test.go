@@ -52,6 +52,9 @@ func TestNewModuleWithStoreSucceeds(t *testing.T) {
 	if m.Store() == nil {
 		t.Fatalf("Store() is nil")
 	}
+	if m.HTTPHandler() == nil {
+		t.Fatalf("HTTPHandler() is nil")
+	}
 }
 
 func TestNewModuleRequiresStore(t *testing.T) {

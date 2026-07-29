@@ -58,6 +58,7 @@ type Module struct {
 	metadata pkmodule.Metadata
 	store    store.Store
 	svc      *Service
+	handler  *Handler
 }
 
 // NewModule constructs a branding module.
@@ -87,6 +88,7 @@ func NewModule(opts ...Option) (*Module, error) {
 		store: st,
 	}
 	m.svc = NewService(st)
+	m.handler = NewHandler(m.svc, cfg.adminBasePath)
 
 	if err := registerAdmin(cfg); err != nil {
 		return nil, err
@@ -203,6 +205,10 @@ func (m *Module) Migrations() fs.FS {
 // Service returns the Service backed by this module's store. Pro can embed
 // and override.
 func (m *Module) Service() *Service { return m.svc }
+
+// HTTPHandler returns the wired HTTP handler so the host application can
+// mount it on its router of choice.
+func (m *Module) HTTPHandler() *Handler { return m.handler }
 
 // Store returns the underlying Store so Pro can implement object-storage-
 // backed logos or wrap with auditing.
