@@ -32,6 +32,24 @@ package branding
 // escape hatch anywhere in this file, which is what keeps a crafted
 // ?error=<script>... value inert in the rendered page.
 //
+// Two review fixes worth calling out explicitly:
+//
+//   - The Skip button carries formnovalidate. Without it, a first-login
+//     visitor who clicks Skip on the untouched (and therefore genuinely
+//     empty) form gets blocked by the display_name field's own `required`
+//     constraint — the exact form Skip exists to let them leave without
+//     filling in.
+//   - Brand color is a radio pair (color_mode=default|custom), not a color
+//     input plus a "clear" checkbox. An HTML <input type="color"> can never
+//     submit "empty" — even one nobody touched still posts its browser
+//     default, #000000 — so a bare color input plus an unchecked-by-default
+//     checkbox would silently persist black on an untouched first-login
+//     form. Pairing it with a radio that defaults to "default palette"
+//     means the submitted primary_color is only trusted when color_mode is
+//     explicitly "custom" (see handler.go's handleSave); "default" (the
+//     initial state) always clears the palette, whatever the browser put in
+//     the color input.
+//
 // ADR: ADR-0009 (ports-only module communication), ADR-0029 (file purpose declaration).
 // Convention: C-14 (every Go file declares its purpose).
 
@@ -52,19 +70,32 @@ const adminPageTitle = "Branding"
 // adminSidebarLabel is the sidebar group this page's single entry lives
 // under. Every OSS reference module's own admin.go groups by a *category*,
 // not a module name (see shell.go's SidebarSections doc); "Workspace" is
-// this module's category.
+// this module's category — the same one tenant/admin.go uses (see
+// adminSidebarOrder below).
 const adminSidebarLabel = "Workspace"
 
 // adminPagePathSuffix is appended to the normalized admin base path
 // (WithAdminBasePath) to build the page's absolute route, e.g.
-// "/admin" + "/branding" = "/admin/branding".
+// "/admin" + "/branding" = "/admin/branding". handler.go's redirectSaved and
+// redirectError share this exact constant for their own "<adminBasePath>
+// + .../branding" targets, so the page's route and the form's redirect
+// destination can never drift apart into two hand-typed "/branding"
+// literals.
 const adminPagePathSuffix = "/branding"
 
-// adminSidebarOrder is deliberately high so Workspace lands after the
-// entity-backed sections every other reference module registers (tenant 10,
-// user 20, apikey 30, notification 50, health 80, audit 90) — branding is a
-// settings surface, not a managed entity list, and reads naturally last.
-const adminSidebarOrder = 90
+// adminSidebarOrder only matters in a host that does NOT also compose
+// tenant_management. tenant/admin.go registers its own SidebarSection under
+// this exact same Label ("Workspace") at Order 10, and shell.go's
+// SidebarSections merges every section sharing a Label into one group
+// anchored at its EARLIEST member's Order (see that method's doc comment) —
+// so in the common case (tenant_management present) the merged "Workspace"
+// group sits wherever tenant put it, at Order 10, regardless of what
+// branding declares here. 95 only decides where the group lands when
+// branding is the *sole* module registering "Workspace" — a plausible
+// standalone-module composition, and the reason this is deliberately a
+// high number: branding is a settings surface, not a managed entity list,
+// and reads naturally last among any other sole members of that group.
+const adminSidebarOrder = 95
 
 // fontOptions is the curated font catalog the <select> offers, in display
 // order. Values must match palette.go's fontStacks keys exactly; the empty
@@ -76,6 +107,12 @@ var fontOptions = []struct{ Value, Label string }{
 	{"grotesk", "Grotesk"},
 	{"plex", "Plex"},
 }
+
+// fallbackLogoAlt is the <img> alt text used when a tenant has a logo but no
+// declared LogoAlt — an empty alt attribute on a meaningful (non-decorative)
+// image fails basic accessibility review, so the preview always describes
+// itself even before the operator fills in real alt text.
+const fallbackLogoAlt = "Current logo"
 
 // brandingPageTemplate is parsed once at package init; a malformed template
 // is a programmer error that should fail fast at process start, matching
@@ -93,10 +130,17 @@ type brandingPageData struct {
 	FontOptions   []fontOptionView
 	HasLogo       bool
 	LogoURL       string
-	LogoAlt       string
-	Saved         bool
-	HasError      bool
-	ErrorMsg      string
+	// LogoAlt is the raw stored value: it prefills the logo_alt text input
+	// exactly, including when empty, so the operator sees what is actually on
+	// record rather than a synthesized placeholder.
+	LogoAlt string
+	// LogoAltDisplay is what the <img> alt attribute renders: LogoAlt, or
+	// fallbackLogoAlt when it is empty, so the preview is never announced to
+	// assistive tech as unlabeled.
+	LogoAltDisplay string
+	Saved          bool
+	HasError       bool
+	ErrorMsg       string
 }
 
 // fontOptionView is one <option> the font <select> renders.
@@ -132,18 +176,24 @@ func (h *adminPageHandler) Render(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logoAltDisplay := profile.LogoAlt
+	if logoAltDisplay == "" {
+		logoAltDisplay = fallbackLogoAlt
+	}
+
 	data := brandingPageData{
-		BasePath:      h.adminBasePath,
-		APIPath:       apiPath,
-		SetupComplete: profile.SetupComplete,
-		DisplayName:   profile.DisplayName,
-		HasColor:      profile.PrimaryColor != "",
-		PrimaryColor:  profile.PrimaryColor,
-		FontOptions:   buildFontOptions(profile.FontKey),
-		HasLogo:       profile.LogoURL != "",
-		LogoURL:       profile.LogoURL,
-		LogoAlt:       profile.LogoAlt,
-		Saved:         r.URL.Query().Get("saved") == "1",
+		BasePath:       h.adminBasePath,
+		APIPath:        apiPath,
+		SetupComplete:  profile.SetupComplete,
+		DisplayName:    profile.DisplayName,
+		HasColor:       profile.PrimaryColor != "",
+		PrimaryColor:   profile.PrimaryColor,
+		FontOptions:    buildFontOptions(profile.FontKey),
+		HasLogo:        profile.LogoURL != "",
+		LogoURL:        profile.LogoURL,
+		LogoAlt:        profile.LogoAlt,
+		LogoAltDisplay: logoAltDisplay,
+		Saved:          r.URL.Query().Get("saved") == "1",
 	}
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
 		data.HasError = true
@@ -179,9 +229,12 @@ func buildFontOptions(selected string) []fontOptionView {
 // component styling is deliberately minimal (see the file header on the CSP
 // constraint): pk-page-head/pk-eyebrow/pk-lede/pk-backlink are chrome
 // classes already served by _admin.css that read sensibly standalone; the
-// form itself is plain semantic HTML, inheriting body/typography/focus
-// styles from the same stylesheet rather than forcing an ill-fitting
-// component class onto a control _admin.css never described one for.
+// form itself is plain semantic HTML (each row a <p> for the browser's
+// default block rhythm, one <fieldset> for the brand-color radio pair),
+// inheriting body/typography/focus styles from the same stylesheet rather
+// than forcing an ill-fitting component class onto a control _admin.css
+// never described one for. "logo-preview" on the <img> is not yet backed by
+// any rule — it is left as a styling hook for Task 7's _branding.css.
 const brandingPageHTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -197,52 +250,58 @@ const brandingPageHTML = `<!doctype html>
 <header class="pk-page-head">
 <div>
 <p class="pk-eyebrow">Workspace</p>
-{{if .SetupComplete}}<h1>Branding</h1>{{else}}<h1>Set up your workspace</h1>
+{{if .SetupComplete}}<h1>Branding</h1>
+<p class="pk-lede">Your workspace's name, logo, and colors — changes apply immediately.</p>{{else}}<h1>Set up your workspace</h1>
 <p class="pk-lede">Name your workspace, add your logo and brand color — or skip and do this any time from Admin → Branding.</p>{{end}}
 </div>
 </header>
 
-{{if .Saved}}<p>Saved.</p>{{end}}
-{{if .HasError}}<p>{{.ErrorMsg}}</p>{{end}}
+{{if .Saved}}<p role="status">Saved.</p>{{end}}
+{{if .HasError}}<p role="alert">Couldn't save: {{.ErrorMsg}}</p>{{end}}
 
 <form method="post" action="{{.APIPath}}" enctype="multipart/form-data">
-<div>
+<p>
 <label for="display_name">Workspace name</label>
 <input type="text" id="display_name" name="display_name" value="{{.DisplayName}}" required maxlength="120">
-</div>
+</p>
 
-<div>
-<label for="primary_color">Brand color</label>
+<fieldset>
+<legend>Brand color</legend>
+<p>
+<label><input type="radio" name="color_mode" value="default"{{if not .HasColor}} checked{{end}}> Default palette</label>
+</p>
+<p>
+<label><input type="radio" name="color_mode" value="custom"{{if .HasColor}} checked{{end}}> Custom color</label>
 <input type="color" id="primary_color" name="primary_color"{{if .HasColor}} value="{{.PrimaryColor}}"{{end}}>
-</div>
-<div>
-<label for="clear_color"><input type="checkbox" id="clear_color" name="clear_color" value="on"> Use the default palette instead</label>
-</div>
+</p>
+</fieldset>
 
-<div>
+<p>
 <label for="font_key">Font</label>
 <select id="font_key" name="font_key">
 {{range .FontOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
 {{end}}</select>
-</div>
+</p>
+<p>Editorial is a serif; Grotesk and Plex are sans-serifs.</p>
 
-<div>
+<p>
 <label for="logo">Logo</label>
 <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-</div>
+</p>
+<p>PNG, JPEG, WebP, or SVG up to 1 MiB.</p>
 
 {{if .HasLogo}}
-<div>
-<img src="{{.LogoURL}}" alt="{{.LogoAlt}}" class="logo-preview">
-<label for="logo_alt">Logo alt text</label>
-<input type="text" id="logo_alt" name="logo_alt" value="{{.LogoAlt}}">
-</div>
+<p><img src="{{.LogoURL}}" alt="{{.LogoAltDisplay}}" width="64" class="logo-preview"></p>
 {{end}}
+<p>
+<label for="logo_alt">Logo alt text</label>
+<input type="text" id="logo_alt" name="logo_alt" value="{{.LogoAlt}}" maxlength="120">
+</p>
 
-<div>
+<p>
 <button type="submit" name="action" value="save">Save</button>
-{{if not .SetupComplete}}<button type="submit" name="action" value="skip">Skip for now</button>{{end}}
-</div>
+{{if not .SetupComplete}}<button type="submit" name="action" value="skip" formnovalidate>Skip for now</button>{{end}}
+</p>
 </form>
 </div>
 </main>

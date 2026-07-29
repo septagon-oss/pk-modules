@@ -252,6 +252,13 @@ func TestNewModuleRegistersAdminPageAndSidebar(t *testing.T) {
 	if section.Items[0].Path != "/admin/branding" || section.Items[0].Label != "Branding" {
 		t.Fatalf("section.Items[0] = %+v, want {Path: /admin/branding, Label: Branding}", section.Items[0])
 	}
+	// 95 only decides where "Workspace" lands in a host without
+	// tenant_management: tenant/admin.go registers the same-labeled section
+	// at Order 10, and the shell merges same-label sections at the earliest
+	// member's Order (see admin_page.go's adminSidebarOrder doc comment).
+	if section.Order != 95 {
+		t.Fatalf("section.Order = %d, want 95", section.Order)
+	}
 }
 
 func TestAdminPageRenderSetupCopyForNewTenant(t *testing.T) {
@@ -273,9 +280,22 @@ func TestAdminPageRenderSetupCopyForNewTenant(t *testing.T) {
 		`name="display_name"`,
 		`action="/api/v1/branding"`,
 		`enctype="multipart/form-data"`,
-		`name="action" value="skip"`,
 		"Skip for now",
+		// The Skip button must carry formnovalidate: without it, the
+		// display_name field's `required` constraint blocks the exact
+		// untouched-form submission Skip exists to allow (CRITICAL fix).
+		`name="action" value="skip" formnovalidate`,
 		`<link rel="stylesheet" href="/admin/static/_admin.css">`,
+		// Brand color is a radio pair, not a color input + checkbox: a fresh
+		// tenant (no color on record) must default to "default palette", not
+		// silently trust whatever the color input's browser default is.
+		`name="color_mode" value="default" checked`,
+		`<legend>Brand color</legend>`,
+		// logo_alt is always rendered now, not gated on an existing logo, so
+		// an operator can set alt text alongside a brand-new upload.
+		`name="logo_alt"`,
+		"PNG, JPEG, WebP, or SVG up to 1 MiB.",
+		"Editorial is a serif; Grotesk and Plex are sans-serifs.",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q; body=%s", want, body)
@@ -332,6 +352,59 @@ func TestAdminPageRenderSettingsCopyForCompletedTenant(t *testing.T) {
 	if strings.Contains(body, "Skip for now") {
 		t.Fatalf("body still shows Skip for now for a completed tenant; body=%s", body)
 	}
+	// A tenant with a color on record must default the radio pair to
+	// "custom", not "default palette".
+	if !strings.Contains(body, `name="color_mode" value="custom" checked`) {
+		t.Fatalf("body missing checked custom color_mode radio; body=%s", body)
+	}
+	// The preview is bounded to a fixed width (no CSS available to size it)
+	// and, since this seed never set LogoAlt, falls back to "Current logo"
+	// rather than an empty (inaccessible) alt attribute.
+	if !strings.Contains(body, `width="64"`) {
+		t.Fatalf("body missing bounded logo preview width; body=%s", body)
+	}
+	if !strings.Contains(body, `alt="Current logo"`) {
+		t.Fatalf("body missing fallback alt text for a logo with no declared LogoAlt; body=%s", body)
+	}
+	if !strings.Contains(body, "Your workspace's name, logo, and colors — changes apply immediately.") {
+		t.Fatalf("body missing settings-mode lede; body=%s", body)
+	}
+}
+
+// TestAdminPageRenderLogoAltUsesStoredValueOverFallback proves a declared
+// LogoAlt is used verbatim in the preview's alt attribute — the "Current
+// logo" fallback (see the sibling test above) only applies when no alt text
+// is on record — and that the same value prefills the always-rendered
+// logo_alt input.
+func TestAdminPageRenderLogoAltUsesStoredValueOverFallback(t *testing.T) {
+	t.Parallel()
+	reg := &fakeAdminRegistrar{}
+	m := newModule(t, branding.WithAdminRegistrar(reg), branding.WithAdminBasePath("/admin"))
+
+	if err := m.Service().Save(context.Background(), "tenant-alt", branding.SaveParams{
+		DisplayName:     "Acme Inc",
+		LogoData:        pngBytes,
+		LogoContentType: "image/png",
+		LogoAlt:         "Acme logo",
+	}); err != nil {
+		t.Fatalf("seed Save: %v", err)
+	}
+
+	render := reg.pages[0].Render
+	req := withPrincipal(httptest.NewRequest(http.MethodGet, "/admin/branding", nil), "tenant-alt")
+	rec := httptest.NewRecorder()
+	render(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `alt="Acme logo"`) {
+		t.Fatalf("body missing declared alt text on the preview; body=%s", body)
+	}
+	if strings.Contains(body, `alt="Current logo"`) {
+		t.Fatalf("body used the fallback alt text despite a declared LogoAlt; body=%s", body)
+	}
+	if !strings.Contains(body, `name="logo_alt" value="Acme logo"`) {
+		t.Fatalf("body missing prefilled logo_alt input; body=%s", body)
+	}
 }
 
 // TestAdminPageRenderEscapesErrorQueryParam is the security regression this
@@ -358,6 +431,11 @@ func TestAdminPageRenderEscapesErrorQueryParam(t *testing.T) {
 	if strings.Contains(body, "<img src=x") {
 		t.Fatalf("raw attack payload leaked unescaped into the page; body=%s", body)
 	}
+	// Error feedback is announced to assistive tech via role="alert" and
+	// prefixed for a human reader, not just visually distinguished.
+	if !strings.Contains(body, `<p role="alert">Couldn't save: `) {
+		t.Fatalf("body missing role=alert error feedback; body=%s", body)
+	}
 }
 
 func TestAdminPageRenderSavedQueryShowsConfirmation(t *testing.T) {
@@ -373,8 +451,10 @@ func TestAdminPageRenderSavedQueryShowsConfirmation(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Saved") {
-		t.Fatalf("body missing saved confirmation; body=%s", rec.Body.String())
+	// Saved feedback is announced to assistive tech via role="status", not
+	// just visually distinguished.
+	if !strings.Contains(rec.Body.String(), `<p role="status">Saved.</p>`) {
+		t.Fatalf("body missing role=status saved confirmation; body=%s", rec.Body.String())
 	}
 }
 

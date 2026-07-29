@@ -177,6 +177,11 @@ func (s *Service) Save(ctx context.Context, tenantID string, params SaveParams) 
 		}
 	}
 
+	logoAlt, err := validateLogoAlt(params.LogoAlt)
+	if err != nil {
+		return err
+	}
+
 	rec, err := s.loadOrNew(ctx, tenantID)
 	if err != nil {
 		return err
@@ -185,7 +190,7 @@ func (s *Service) Save(ctx context.Context, tenantID string, params SaveParams) 
 	if hasNewLogo {
 		rec.LogoData = params.LogoData
 		rec.LogoContentType = strings.TrimSpace(params.LogoContentType)
-		rec.LogoAlt = strings.TrimSpace(params.LogoAlt)
+		rec.LogoAlt = logoAlt
 	}
 	// else: no new logo supplied, so rec keeps whatever logo it already had
 	// (nothing, if this is the first Save).
@@ -250,6 +255,18 @@ func validateDisplayName(name string) (string, error) {
 		return "", fmt.Errorf("branding: display name exceeds %d characters", maxDisplayNameLen)
 	}
 	return name, nil
+}
+
+// validateLogoAlt trims and bounds logo alt text to the same maxDisplayNameLen
+// budget as validateDisplayName, counted in runes for the same multibyte-
+// script reason — but unlike a display name, alt text is optional, so an
+// empty (or all-whitespace) value is valid rather than rejected.
+func validateLogoAlt(alt string) (string, error) {
+	alt = strings.TrimSpace(alt)
+	if utf8.RuneCountInString(alt) > maxDisplayNameLen {
+		return "", fmt.Errorf("branding: logo alt text exceeds %d characters", maxDisplayNameLen)
+	}
+	return alt, nil
 }
 
 // validateLogo bounds the logo payload size and confirms its bytes actually

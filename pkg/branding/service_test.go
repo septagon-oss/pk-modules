@@ -227,6 +227,43 @@ func TestSavePaletteValidationDelegatesToPalette(t *testing.T) {
 	})
 }
 
+// TestSaveLogoAltValidation proves logo alt text is bounded to the same
+// rune-counted budget as the display name (validateLogoAlt reuses
+// maxDisplayNameLen) but, unlike the display name, is optional: an empty
+// value is valid.
+func TestSaveLogoAltValidation(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		alt     string
+		wantErr bool
+	}{
+		{"ok", "Acme logo", false},
+		{"empty ok (alt text is optional)", "", false},
+		{"trims to empty ok", "   ", false},
+		{"exactly max length ok (ascii)", strings.Repeat("a", 120), false},
+		{"over max length rejected (ascii)", strings.Repeat("a", 121), true},
+		{"exactly max length ok (multibyte, 120 runes)", strings.Repeat("名", 120), false},
+		{"over max length rejected (multibyte, 121 runes)", strings.Repeat("名", 121), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newTestService(t)
+			err := svc.Save(context.Background(), "tenant", branding.SaveParams{
+				DisplayName:     "Acme Ops",
+				LogoData:        pngBytes,
+				LogoContentType: "image/png",
+				LogoAlt:         tc.alt,
+			})
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Save err = %v, wantErr = %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestSaveLogoValidation(t *testing.T) {
 	t.Parallel()
 

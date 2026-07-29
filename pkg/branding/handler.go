@@ -171,11 +171,16 @@ func (h *Handler) handleSave(w http.ResponseWriter, r *http.Request, tenantID st
 		FontKey:      r.FormValue("font_key"),
 		LogoAlt:      r.FormValue("logo_alt"),
 	}
-	// clear_color is the admin page's (Task 6) no-JS way to reset the palette:
-	// an HTML color input can never submit "empty" (an unset one still posts
-	// its default, #000000), so the form instead offers a checkbox that, when
-	// present, overrides whatever primary_color was submitted alongside it.
-	if r.FormValue("clear_color") != "" {
+	// color_mode is the admin page's (Task 6) no-JS way to avoid silently
+	// persisting a color nobody chose: an HTML color input can never submit
+	// "empty" — even one the visitor never touched still posts its browser
+	// default, #000000 — so the form pairs it with a radio choice instead of
+	// trusting the input alone. Only color_mode=custom uses the submitted
+	// primary_color; every other value (default, blank, or anything a
+	// hand-crafted request sends) clears the palette back to the theme
+	// default, exactly like an explicit "use the default palette" choice
+	// would.
+	if r.FormValue("color_mode") != "custom" {
 		params.PrimaryColor = ""
 	}
 	file, header, err := r.FormFile("logo")
@@ -219,11 +224,11 @@ func (h *Handler) handleSkip(w http.ResponseWriter, r *http.Request, tenantID st
 }
 
 func (h *Handler) redirectSaved(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, h.adminBasePath+"/branding?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, h.adminBasePath+adminPagePathSuffix+"?saved=1", http.StatusSeeOther)
 }
 
 func (h *Handler) redirectError(w http.ResponseWriter, r *http.Request, err error) {
-	http.Redirect(w, r, h.adminBasePath+"/branding?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+	http.Redirect(w, r, h.adminBasePath+adminPagePathSuffix+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 }
 
 // serveLogo serves the tenant's raw logo bytes. The four security/cache

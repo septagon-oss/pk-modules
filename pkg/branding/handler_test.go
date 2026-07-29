@@ -172,13 +172,17 @@ func TestHandlerPostSaveSuccessRedirectsAndPersists(t *testing.T) {
 	fields := map[string]string{
 		"action":        "save",
 		"display_name":  "Acme Corp",
+		"color_mode":    "custom",
 		"primary_color": "#14b8a6",
 		"font_key":      "editorial",
 	}
 	// logo_alt is deliberately omitted here: it is logo metadata, so Save
 	// only applies it alongside an actual logo upload (see
 	// TestHandlerPostSaveWithValidLogoPersistsAndServesLogoURL) — sending it
-	// without a file part must not persist anything.
+	// without a file part must not persist anything. color_mode=custom is
+	// what tells handleSave to trust the submitted primary_color at all (see
+	// TestHandlerPostSaveColorModeDefaultIgnoresSubmittedColor for the
+	// opposite case).
 	req := withPrincipal(newMultipartRequest(t, "/api/v1/branding", fields, nil), "tenant-1")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -202,12 +206,50 @@ func TestHandlerPostSaveSuccessRedirectsAndPersists(t *testing.T) {
 	}
 }
 
-// TestHandlerPostSaveClearColorIgnoresSubmittedColor proves the admin page's
-// (Task 6) no-JS "use the default palette" checkbox actually works: an HTML
-// color input can never submit "empty" — an unset one still posts its
-// default #000000 — so clear_color=on must override whatever primary_color
-// rode along with it, even when that value looks like a deliberate choice.
-func TestHandlerPostSaveClearColorIgnoresSubmittedColor(t *testing.T) {
+// TestHandlerPostSaveColorModeDefaultIgnoresSubmittedColor is the "no silent
+// black" regression test: an HTML <input type="color"> can never submit
+// "empty" — even one nobody touched still posts its browser default,
+// #000000 — so an untouched first-login form (color_mode defaults to
+// "default" on the rendered page) must never let that default value get
+// mistaken for a deliberate color choice. Only color_mode=custom trusts the
+// submitted primary_color at all; every other value, including this
+// explicit "default" and a literal #000000, clears the palette.
+func TestHandlerPostSaveColorModeDefaultIgnoresSubmittedColor(t *testing.T) {
+	t.Parallel()
+	svc, _ := newTestService(t)
+	mux := newTestMux(t, svc, "/admin")
+
+	fields := map[string]string{
+		"action":        "save",
+		"display_name":  "Acme Corp",
+		"color_mode":    "default",
+		"primary_color": "#000000",
+	}
+	req := withPrincipal(newMultipartRequest(t, "/api/v1/branding", fields, nil), "tenant-colormode-default")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+
+	profile, err := svc.ResolveBranding(context.Background(), "tenant-colormode-default")
+	if err != nil {
+		t.Fatalf("ResolveBranding: %v", err)
+	}
+	if profile.PrimaryColor != "" {
+		t.Fatalf("PrimaryColor = %q, want empty (color_mode=default must not persist #000000)", profile.PrimaryColor)
+	}
+	if profile.DisplayName != "Acme Corp" {
+		t.Fatalf("DisplayName = %q, want %q", profile.DisplayName, "Acme Corp")
+	}
+}
+
+// TestHandlerPostSaveColorModeMissingDefaultsToNoColor proves a hand-crafted
+// (or otherwise malformed) request that omits color_mode entirely fails safe
+// the same way "default" does, rather than falling back to trusting
+// primary_color.
+func TestHandlerPostSaveColorModeMissingDefaultsToNoColor(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(t)
 	mux := newTestMux(t, svc, "/admin")
@@ -216,9 +258,8 @@ func TestHandlerPostSaveClearColorIgnoresSubmittedColor(t *testing.T) {
 		"action":        "save",
 		"display_name":  "Acme Corp",
 		"primary_color": "#14b8a6",
-		"clear_color":   "on",
 	}
-	req := withPrincipal(newMultipartRequest(t, "/api/v1/branding", fields, nil), "tenant-clearcolor")
+	req := withPrincipal(newMultipartRequest(t, "/api/v1/branding", fields, nil), "tenant-colormode-missing")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -226,15 +267,12 @@ func TestHandlerPostSaveClearColorIgnoresSubmittedColor(t *testing.T) {
 		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
 	}
 
-	profile, err := svc.ResolveBranding(context.Background(), "tenant-clearcolor")
+	profile, err := svc.ResolveBranding(context.Background(), "tenant-colormode-missing")
 	if err != nil {
 		t.Fatalf("ResolveBranding: %v", err)
 	}
 	if profile.PrimaryColor != "" {
-		t.Fatalf("PrimaryColor = %q, want empty (clear_color=on should override the submitted color)", profile.PrimaryColor)
-	}
-	if profile.DisplayName != "Acme Corp" {
-		t.Fatalf("DisplayName = %q, want %q", profile.DisplayName, "Acme Corp")
+		t.Fatalf("PrimaryColor = %q, want empty (missing color_mode must not persist a color)", profile.PrimaryColor)
 	}
 }
 
