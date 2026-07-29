@@ -233,8 +233,8 @@ func buildFontOptions(selected string) []fontOptionView {
 // default block rhythm, one <fieldset> for the brand-color radio pair),
 // inheriting body/typography/focus styles from the same stylesheet rather
 // than forcing an ill-fitting component class onto a control _admin.css
-// never described one for. "logo-preview" on the <img> is not yet backed by
-// any rule — it is left as a styling hook for Task 7's _branding.css.
+// never described one for. "pk-logo-preview" on the <img> is backed by the
+// documented hook rule Task 7 added to _admin.css.
 const brandingPageHTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -291,7 +291,7 @@ const brandingPageHTML = `<!doctype html>
 <p id="logo-help">PNG, JPEG, WebP, or SVG up to 1 MiB.</p>
 
 {{if .HasLogo}}
-<p><img src="{{.LogoURL}}" alt="{{.LogoAltDisplay}}" width="64" class="logo-preview"></p>
+<p><img src="{{.LogoURL}}" alt="{{.LogoAltDisplay}}" width="64" class="pk-logo-preview"></p>
 {{end}}
 <p>
 <label for="logo_alt">Logo alt text</label>

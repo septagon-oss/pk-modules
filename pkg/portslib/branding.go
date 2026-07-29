@@ -19,8 +19,11 @@ const BrandingContractVersion = "0.1.0"
 
 // BrandingProfile is one tenant's resolved branding. A zero profile (absent
 // record) means "not set up yet": consumers fall back to their defaults and
-// the admin shell shows the first-login setup. LogoURL is a servable route,
-// never raw bytes, so providers can back it with any storage.
+// the admin shell shows the first-login setup. The shell gates any
+// authenticated session tenant whose profile has SetupComplete false —
+// including the zero/absent-record profile, whose empty TenantID must not be
+// read as "no gate". LogoURL is a servable route, never raw bytes, so
+// providers can back it with any storage.
 type BrandingProfile struct {
 	TenantID      string
 	DisplayName   string

@@ -354,9 +354,19 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile := s.resolveBranding(r)
-	if s.branding != nil && profile.TenantID != "" && !profile.SetupComplete && urlPath != s.basePath+"/branding" {
-		http.Redirect(w, r, s.basePath+"/branding", http.StatusSeeOther)
+	// First-login gate. Keyed on the SESSION tenant, never profile.TenantID:
+	// the branding service answers an absent record with a fully zero profile
+	// (TenantID "" included), and that absent-record state is exactly the
+	// first login the gate exists for. sessionTenant is empty when the
+	// resolver is nil, the request is anonymous, or the resolver failed — so
+	// a broken branding store degrades to the default chrome instead of
+	// redirect-looping the console. The redirect target relies on the
+	// cross-module contract that the branding module registers its admin page
+	// at exactly {basePath}+brandingPathSuffix (branding's
+	// adminPagePathSuffix), which is also why that path is exempt.
+	profile, sessionTenant := s.resolveBranding(r)
+	if s.branding != nil && sessionTenant != "" && !profile.SetupComplete && urlPath != s.basePath+brandingPathSuffix {
+		http.Redirect(w, r, s.basePath+brandingPathSuffix, http.StatusSeeOther)
 		return
 	}
 
@@ -413,23 +423,26 @@ func (s *Shell) serveBrandingCSS(w http.ResponseWriter, r *http.Request) {
 }
 
 // resolveBranding resolves the request tenant's branding profile, once per
-// request. A nil resolver, an anonymous request, or a resolver failure all
-// return the zero profile — the shell silently degrades to its default chrome
-// (the package has no logger; a broken branding store must never break the
-// operator console).
-func (s *Shell) resolveBranding(r *http.Request) portslib.BrandingProfile {
+// request, and returns the session tenant the first-login gate keys on. The
+// tenant return is empty when the resolver is nil, the request is anonymous,
+// or the resolver failed — every case where the gate must NOT fire. It is
+// non-empty for an absent record (zero profile, nil error), because a tenant
+// with no branding record has, by definition, not completed setup. Failures
+// degrade silently to the zero profile (the package has no logger; a broken
+// branding store must never break the operator console).
+func (s *Shell) resolveBranding(r *http.Request) (portslib.BrandingProfile, string) {
 	if s.branding == nil {
-		return portslib.BrandingProfile{}
+		return portslib.BrandingProfile{}, ""
 	}
 	tenantID := identity.PrincipalFromContext(r.Context()).TenantID
 	if tenantID == "" {
-		return portslib.BrandingProfile{}
+		return portslib.BrandingProfile{}, ""
 	}
 	profile, err := s.branding.ResolveBranding(r.Context(), tenantID)
 	if err != nil {
-		return portslib.BrandingProfile{}
+		return portslib.BrandingProfile{}, ""
 	}
-	return profile
+	return profile, tenantID
 }
 
 func (s *Shell) findPage(urlPath string) (portslib.AdminPage, bool) {

@@ -159,6 +159,25 @@ func TestIncompleteSetupGatesToBrandingPage(t *testing.T) {
 	}
 }
 
+// TestAbsentBrandingRecordGatesToBrandingPage pins the integration contract
+// with the real branding service (Task 4): when no record exists it returns a
+// FULLY zero profile — TenantID "" included (store.ErrNotFound → zero value,
+// pinned by branding/service_test.go). That absent-record case is exactly the
+// first-login state the gate exists for, so the gate must key on the session
+// principal's tenant, never on profile.TenantID.
+func TestAbsentBrandingRecordGatesToBrandingPage(t *testing.T) {
+	t.Parallel()
+	stub := &stubBranding{} // zero profile, nil error: the service's "no record" answer
+	m := newModule(t, admin.WithBranding(stub))
+	rec := get(t, m.HTTPHandler(), "/admin/", "t1")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303 (absent record must gate to first-login setup)", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/admin/branding" {
+		t.Fatalf("Location = %q, want /admin/branding", loc)
+	}
+}
+
 func TestThemedChromeRendersTenantIdentity(t *testing.T) {
 	t.Parallel()
 	stub := &stubBranding{

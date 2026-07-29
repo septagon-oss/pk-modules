@@ -164,7 +164,7 @@ a:hover {
 
 /* Documented hook: the branding module's admin page renders its uploaded-logo
    preview with this class. */
-.logo-preview {
+.pk-logo-preview {
   max-width: 64px;
   height: auto;
 }

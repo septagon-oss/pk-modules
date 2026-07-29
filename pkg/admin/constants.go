@@ -12,4 +12,10 @@ package admin
 const (
 	defaultTitle    = "PlatformKit Admin"
 	defaultBasePath = "/admin"
+
+	// brandingPathSuffix is the path (under basePath) where the branding
+	// module registers its admin page — branding's adminPagePathSuffix. The
+	// shell's first-login gate both exempts and redirects to
+	// basePath+brandingPathSuffix, so the two declarations must agree.
+	brandingPathSuffix = "/branding"
 )
