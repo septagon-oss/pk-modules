@@ -112,20 +112,25 @@ func (s *Store) Get(ctx context.Context, tenantID string) (*store.Record, error)
 }
 
 // Upsert creates or replaces the branding record for r.TenantID. Timestamps
-// are assigned here, not by the caller: CreatedAt is stamped when the caller
-// left it zero, but only takes effect on the first insert for a tenant — the
-// ON CONFLICT branch below omits created_at from its SET list, so an existing
-// row's original value is always preserved. UpdatedAt always advances to now.
+// are assigned here, not by the caller: the candidate CreatedAt used for a
+// first insert is now (or the caller's value, if already set), but on the
+// ON CONFLICT branch that candidate is never applied — the SET list omits
+// created_at, so an existing row's original value is untouched. The RETURNING
+// clause reads created_at back from the row as persisted, so r.CreatedAt
+// always reflects ground truth after the call: the caller's timestamp on a
+// first insert, or the original insert's timestamp on every later Upsert for
+// the same tenant. UpdatedAt always advances to now.
 func (s *Store) Upsert(ctx context.Context, r *store.Record) error {
 	if r == nil {
 		return errors.New("branding/sqlite: nil record")
 	}
 	now := time.Now().UTC()
-	if r.CreatedAt.IsZero() {
-		r.CreatedAt = now
+	insertCreatedAt := r.CreatedAt
+	if insertCreatedAt.IsZero() {
+		insertCreatedAt = now
 	}
 	r.UpdatedAt = now
-	_, err := s.db.ExecContext(
+	row := s.db.QueryRowContext(
 		ctx,
 		`INSERT INTO branding_profiles (
 			tenant_id, display_name, logo_data, logo_content_type, logo_alt,
@@ -139,11 +144,12 @@ func (s *Store) Upsert(ctx context.Context, r *store.Record) error {
 			primary_color = excluded.primary_color,
 			font_key = excluded.font_key,
 			setup_completed_at = excluded.setup_completed_at,
-			updated_at = excluded.updated_at`,
+			updated_at = excluded.updated_at
+		 RETURNING created_at`,
 		r.TenantID, r.DisplayName, nullableBytes(r.LogoData), r.LogoContentType, r.LogoAlt,
-		r.PrimaryColor, r.FontKey, nullableTime(r.SetupCompletedAt), r.CreatedAt, r.UpdatedAt,
+		r.PrimaryColor, r.FontKey, nullableTime(r.SetupCompletedAt), insertCreatedAt, r.UpdatedAt,
 	)
-	if err != nil {
+	if err := row.Scan(&r.CreatedAt); err != nil {
 		return fmt.Errorf("branding/sqlite: upsert: %w", err)
 	}
 	return nil

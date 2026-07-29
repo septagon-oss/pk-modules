@@ -128,9 +128,11 @@ func TestUpsertTwiceUpdatesInPlace(t *testing.T) {
 		t.Fatalf("Get after #1: %v", err)
 	}
 
-	// Sleep so the second UpdatedAt is observably later than the first; sqlite
-	// stores DATETIME with second-level-or-better resolution, but the two
-	// Upserts could otherwise land in the same instant.
+	// Sleep so the second UpdatedAt is observably later than the first.
+	// modernc.org/sqlite stores DATETIME as nanosecond-precision text, so
+	// resolution isn't the issue — without the sleep, two time.Now() calls in
+	// the same test can land on the same instant and the After() assertion
+	// below would flake.
 	time.Sleep(2 * time.Millisecond)
 
 	if err := s.Upsert(ctx, &store.Record{TenantID: "t1", DisplayName: "Acme Ops Renamed", PrimaryColor: "#000000"}); err != nil {
@@ -170,6 +172,63 @@ func TestUpsertNil(t *testing.T) {
 	}
 }
 
+// TestUpsertExistingReportsPersistedCreatedAt guards against a subtle bug:
+// a second Upsert for an already-existing tenant passes a zero r.CreatedAt
+// (the caller never sets it), and it would be wrong for the store to stamp
+// that zero with time.Now() and hand it back on r — the row's created_at was
+// never touched by the conflict path, so the caller's in-memory record must
+// reflect the original, persisted value, not the moment of the second call.
+func TestUpsertExistingReportsPersistedCreatedAt(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	first := &store.Record{TenantID: "t1", DisplayName: "Acme Ops"}
+	if err := s.Upsert(ctx, first); err != nil {
+		t.Fatalf("Upsert #1: %v", err)
+	}
+	originalCreatedAt := first.CreatedAt
+
+	time.Sleep(2 * time.Millisecond)
+
+	second := &store.Record{TenantID: "t1", DisplayName: "Acme Ops Renamed"}
+	if err := s.Upsert(ctx, second); err != nil {
+		t.Fatalf("Upsert #2: %v", err)
+	}
+	if !second.CreatedAt.Equal(originalCreatedAt) {
+		t.Fatalf("Upsert on an existing tenant reported CreatedAt = %v, want the persisted value %v",
+			second.CreatedAt, originalCreatedAt)
+	}
+
+	got, err := s.Get(ctx, "t1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.CreatedAt.Equal(originalCreatedAt) {
+		t.Fatalf("persisted CreatedAt = %v, want %v", got.CreatedAt, originalCreatedAt)
+	}
+}
+
+// TestUpsertEmptyLogoNormalizesToNull pins the documented behavior that an
+// empty (non-nil) LogoData slice is treated the same as "no logo" and stored
+// as SQL NULL, not as a zero-length BLOB.
+func TestUpsertEmptyLogoNormalizesToNull(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	if err := s.Upsert(ctx, &store.Record{TenantID: "t1", DisplayName: "Acme Ops", LogoData: []byte{}}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	got, err := s.Get(ctx, "t1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.LogoData != nil {
+		t.Fatalf("LogoData = %v, want nil (empty slice normalizes to NULL)", got.LogoData)
+	}
+}
+
 func TestTenantsIsolated(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
@@ -195,5 +254,27 @@ func TestTenantsIsolated(t *testing.T) {
 	}
 	if got2.DisplayName != "Tenant Two" || got2.PrimaryColor != "#222222" {
 		t.Fatalf("t2 record leaked/incorrect: %+v", got2)
+	}
+
+	// Re-upserting t1 must not disturb t2's row: ON CONFLICT targets only the
+	// conflicting tenant_id, so t2 should read back byte-for-byte identical.
+	if err := s.Upsert(ctx, &store.Record{TenantID: "t1", DisplayName: "Tenant One Renamed", PrimaryColor: "#333333"}); err != nil {
+		t.Fatalf("Upsert t1 again: %v", err)
+	}
+	got2Again, err := s.Get(ctx, "t2")
+	if err != nil {
+		t.Fatalf("Get t2 again: %v", err)
+	}
+	if got2Again.TenantID != got2.TenantID ||
+		got2Again.DisplayName != got2.DisplayName ||
+		string(got2Again.LogoData) != string(got2.LogoData) ||
+		got2Again.LogoContentType != got2.LogoContentType ||
+		got2Again.LogoAlt != got2.LogoAlt ||
+		got2Again.PrimaryColor != got2.PrimaryColor ||
+		got2Again.FontKey != got2.FontKey ||
+		(got2Again.SetupCompletedAt == nil) != (got2.SetupCompletedAt == nil) ||
+		!got2Again.CreatedAt.Equal(got2.CreatedAt) ||
+		!got2Again.UpdatedAt.Equal(got2.UpdatedAt) {
+		t.Fatalf("t2 record changed after re-upserting t1: before=%+v after=%+v", got2, got2Again)
 	}
 }
