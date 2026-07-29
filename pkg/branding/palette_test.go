@@ -8,11 +8,14 @@ package branding_test
 // external test package: emitted custom-property names must match the default
 // theme's exactly, and every emitted accent pair must be independently
 // measurable at WCAG AA 4.5:1 via the canonical pk-design contrast helper.
+// It also pins the documented reachability claim: the ink fallback stays
+// unreachable while the current darkening constants hold.
 //
 // ADR: ADR-0029 (file purpose declaration).
 // Convention: C-10 (shared builders return errors), C-14 (every Go file declares its purpose).
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -182,6 +185,41 @@ func TestDeriveLayerProducesATenantTokenLayer(t *testing.T) {
 	for _, want := range []string{"--pk-color-accent-default", "--pk-font-body"} {
 		if !strings.Contains(css, want) {
 			t.Errorf("layer css is missing %s:\n%s", want, css)
+		}
+	}
+}
+
+// TestInkFallbackStaysUnreachableUnderCurrentConstants sweeps a coarse RGB
+// grid (16-step stride plus 255 on every channel, including the worst case
+// #ffffff) and asserts the white branch of the accent policy wins for every
+// primary. palette.go documents the ink fallback as unreachable while
+// darkenStep = 5% and maxDarkenSteps = 12 hold; if a constant change ever
+// flips that, this test fails so the constants and the policy documentation
+// get revisited together instead of the behavior shifting silently.
+func TestInkFallbackStaysUnreachableUnderCurrentConstants(t *testing.T) {
+	channelValues := make([]int, 0, 17)
+	for v := 0; v < 256; v += 16 {
+		channelValues = append(channelValues, v)
+	}
+	channelValues = append(channelValues, 255)
+	for _, r := range channelValues {
+		for _, g := range channelValues {
+			for _, b := range channelValues {
+				primary := fmt.Sprintf("#%02x%02x%02x", r, g, b)
+				layer, ok, err := branding.DeriveLayer(primary, "")
+				if err != nil || !ok {
+					t.Fatalf("DeriveLayer(%q, \"\") = ok=%v, err=%v", primary, ok, err)
+				}
+				token, found, err := layer.Tokens.Lookup("color.accent.on")
+				if err != nil || !found {
+					t.Fatalf("Lookup(color.accent.on) for %q: found=%v, err=%v", primary, found, err)
+				}
+				if token.Value != "#ffffff" {
+					t.Fatalf("ink fallback became reachable: accent.on = %v for primary %s; "+
+						"did darkenStep or maxDarkenSteps change? Revisit the reachability notes in palette.go",
+						token.Value, primary)
+				}
+			}
 		}
 	}
 }

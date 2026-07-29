@@ -15,13 +15,17 @@ package branding
 //
 // Derivation policy:
 //   - color.accent.default: the primary darkened toward black in 5% steps of
-//     the original color (max 12 steps, i.e. down to 40% brightness) until
-//     the 8-bit color actually emitted reaches WCAG AA 4.5:1 contrast against
-//     white; color.accent.on is then white. If 12 steps cannot reach 4.5:1,
-//     the 12-step result is kept and color.accent.on becomes ink (#111827),
-//     whose contrast against the kept accent is asserted instead. Contrast is
-//     always measured on the quantized hex value that will be emitted, never
-//     on intermediate floats.
+//     the original color until the 8-bit color actually emitted reaches WCAG
+//     AA 4.5:1 contrast against white; color.accent.on is then white. Under
+//     the current constants (darkenStep 5%, maxDarkenSteps 12) every primary
+//     reaches this within 12 steps: the worst case, #ffffff, converges at
+//     step 11 (#737373, 4.74:1). The ink fallback below is therefore
+//     defensive only and unreachable today; it is kept so constant changes
+//     fail safe. Should a change ever make maxDarkenSteps insufficient,
+//     darkening continues past it until the emitted pair measures at least
+//     4.5:1 against either white or ink (#111827), never silently emitting
+//     an inaccessible pair. Contrast is always measured on the quantized hex
+//     value that will be emitted, never on intermediate floats.
 //   - color.accent.hover: accent.default darkened a further 8%.
 //   - color.signal and color.focus: the raw primary, canonicalized to
 //     lowercase #rrggbb.
@@ -54,8 +58,12 @@ const (
 	maxDarkenSteps = 12
 	// hoverDarken is the extra darkening applied to derive the hover accent.
 	hoverDarken = 0.08
-	// inkHex is the dark accent.on fallback for primaries too light to reach
-	// AA contrast against white within maxDarkenSteps.
+	// inkHex is the defensive accent.on fallback for primaries that cannot
+	// reach AA contrast against white within maxDarkenSteps. Unreachable
+	// while darkenStep = 5% and maxDarkenSteps = 12 hold (the worst case,
+	// #ffffff, reaches AA against white at step 11); kept so constant
+	// changes fail safe, guarded at derivation time by correctedAccent and
+	// at test time by TestInkFallbackStaysUnreachableUnderCurrentConstants.
 	inkHex = "#111827"
 	// whiteHex is the accent.on color whenever the corrected accent reaches
 	// AA contrast against white.
@@ -138,20 +146,38 @@ func DeriveCSS(primaryHex, fontKey string) (string, error) {
 	return tokens.CSSVars(layer.Tokens)
 }
 
+// inkLuminance is the WCAG relative luminance of inkHex, precomputed so the
+// fallback guard in correctedAccent measures against the exact ink color.
+var inkLuminance = func() float64 {
+	r, g, b, err := parseHex(inkHex)
+	if err != nil {
+		panic(fmt.Sprintf("branding: inkHex invariant broken: %v", err))
+	}
+	return relativeLuminance(r, g, b)
+}()
+
 // correctedAccent darkens the primary until the emitted 8-bit color reaches
 // WCAG AA contrast against white, per the policy in the file header. It
 // returns the corrected accent channels plus the accent.on hex to pair with.
+// The ink branch is defensive only: it is unreachable under the current
+// constants (see inkHex), and if a constant change ever makes it reachable
+// it still refuses to return a pair below AA, darkening further until white
+// or ink measures at least 4.5:1 against the emitted accent.
 func correctedAccent(r, g, b float64) (float64, float64, float64, string) {
 	whiteLum := relativeLuminance(1, 1, 1)
-	var ar, ag, ab float64
-	for step := 0; step <= maxDarkenSteps; step++ {
-		ar, ag, ab = darken(r, g, b, float64(step)*darkenStep)
+	// Terminates: darken's factor floors at 0 once step*darkenStep reaches 1
+	// (step 20 today), and black measures 21:1 against white.
+	for step := 0; ; step++ {
+		ar, ag, ab := darken(r, g, b, float64(step)*darkenStep)
 		ar, ag, ab = quantize(ar), quantize(ag), quantize(ab)
-		if contrastRatio(relativeLuminance(ar, ag, ab), whiteLum) >= tokens.WCAGAAContrast {
+		accentLum := relativeLuminance(ar, ag, ab)
+		if contrastRatio(accentLum, whiteLum) >= tokens.WCAGAAContrast {
 			return ar, ag, ab, whiteHex
 		}
+		if step >= maxDarkenSteps && contrastRatio(accentLum, inkLuminance) >= tokens.WCAGAAContrast {
+			return ar, ag, ab, inkHex
+		}
 	}
-	return ar, ag, ab, inkHex
 }
 
 // parseHex decodes #rgb and #rrggbb colors into channels in [0, 1]. All other
