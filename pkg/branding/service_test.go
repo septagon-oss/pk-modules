@@ -349,7 +349,14 @@ func TestSaveStampsSetupCompletedOnFirstSaveOnly(t *testing.T) {
 	}
 }
 
-func TestSaveWithoutNewLogoPreservesExistingLogo(t *testing.T) {
+// TestSaveWithoutNewLogoPreservesLogoBytes proves the one piece of logo
+// state a metadata-only Save (no new file part) can never touch: the bytes
+// and declared content type. LogoAlt is a different story — see
+// TestSaveAltFollowsParamsWheneverALogoExists — so this test re-supplies the
+// same alt text on the second Save, exactly as the admin page's
+// always-rendered logo_alt input does on every submission, to keep the
+// logo-bytes invariant isolated from alt semantics.
+func TestSaveWithoutNewLogoPreservesLogoBytes(t *testing.T) {
 	t.Parallel()
 	svc, st := newTestService(t)
 	ctx := context.Background()
@@ -364,7 +371,10 @@ func TestSaveWithoutNewLogoPreservesExistingLogo(t *testing.T) {
 		t.Fatalf("Save with logo: %v", err)
 	}
 
-	if err := svc.Save(ctx, tenantID, branding.SaveParams{DisplayName: "Acme Ops Renamed"}); err != nil {
+	if err := svc.Save(ctx, tenantID, branding.SaveParams{
+		DisplayName: "Acme Ops Renamed",
+		LogoAlt:     "Acme logo",
+	}); err != nil {
 		t.Fatalf("Save without logo: %v", err)
 	}
 
@@ -372,11 +382,114 @@ func TestSaveWithoutNewLogoPreservesExistingLogo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if string(got.LogoData) != string(pngBytes) || got.LogoContentType != "image/png" || got.LogoAlt != "Acme logo" {
-		t.Fatalf("logo not preserved across Save without new logo: %+v", got)
+	if string(got.LogoData) != string(pngBytes) || got.LogoContentType != "image/png" {
+		t.Fatalf("logo bytes/content type not preserved across Save without new logo: %+v", got)
 	}
 	if got.DisplayName != "Acme Ops Renamed" {
 		t.Fatalf("DisplayName = %q, want %q", got.DisplayName, "Acme Ops Renamed")
+	}
+}
+
+// TestSaveAltFollowsParamsWheneverALogoExists pins the other half of the
+// alt-only-edit fix: LogoAlt is no longer silently preserved across a Save
+// that omits it — whenever a logo exists (old or new), Save takes LogoAlt
+// directly from params, the same way DisplayName always does, so a caller
+// must resend the current value to keep it. That is only a footgun for
+// direct Save callers that skip the field: the admin page's form always
+// resends it, since logo_alt is now unconditionally rendered and prefilled
+// (see admin_page.go).
+func TestSaveAltFollowsParamsWheneverALogoExists(t *testing.T) {
+	t.Parallel()
+	svc, st := newTestService(t)
+	ctx := context.Background()
+	tenantID := "tenant-alt-clears"
+
+	if err := svc.Save(ctx, tenantID, branding.SaveParams{
+		DisplayName:     "Acme Ops",
+		LogoData:        pngBytes,
+		LogoContentType: "image/png",
+		LogoAlt:         "Acme logo",
+	}); err != nil {
+		t.Fatalf("Save with logo: %v", err)
+	}
+
+	// No LogoAlt this time, and no new logo: under the new contract this
+	// clears the alt — it does not fall back to preserving the old value.
+	if err := svc.Save(ctx, tenantID, branding.SaveParams{DisplayName: "Acme Ops"}); err != nil {
+		t.Fatalf("Save without alt: %v", err)
+	}
+
+	got, err := st.Get(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.LogoAlt != "" {
+		t.Fatalf("LogoAlt = %q, want empty (a Save that omits it clears it whenever a logo exists)", got.LogoAlt)
+	}
+}
+
+// TestSaveAltOnlyChangeOnExistingLogoPersists proves that editing just the
+// alt text — no new file part, on a record that already has a logo — is not
+// silently dropped. Save previously gated LogoAlt entirely on hasNewLogo, so
+// an admin submitting the form with only logo_alt changed got a "Saved."
+// redirect with nothing actually written.
+func TestSaveAltOnlyChangeOnExistingLogoPersists(t *testing.T) {
+	t.Parallel()
+	svc, st := newTestService(t)
+	ctx := context.Background()
+	tenantID := "tenant-alt-only"
+
+	if err := svc.Save(ctx, tenantID, branding.SaveParams{
+		DisplayName:     "Acme Ops",
+		LogoData:        pngBytes,
+		LogoContentType: "image/png",
+		LogoAlt:         "Acme logo",
+	}); err != nil {
+		t.Fatalf("Save with logo: %v", err)
+	}
+
+	// No LogoData/LogoContentType this time — only the alt text changes.
+	if err := svc.Save(ctx, tenantID, branding.SaveParams{
+		DisplayName: "Acme Ops",
+		LogoAlt:     "Acme corporate logo, teal wordmark",
+	}); err != nil {
+		t.Fatalf("Save alt-only change: %v", err)
+	}
+
+	got, err := st.Get(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.LogoAlt != "Acme corporate logo, teal wordmark" {
+		t.Fatalf("LogoAlt = %q, want the alt-only update to persist", got.LogoAlt)
+	}
+	if string(got.LogoData) != string(pngBytes) || got.LogoContentType != "image/png" {
+		t.Fatalf("logo bytes/content type should be untouched by an alt-only Save: %+v", got)
+	}
+}
+
+// TestSaveLogoAltIgnoredWithoutAnyLogo proves the alt-only fix does not
+// regress the no-logo-at-all case: alt text has nothing to attach to when
+// the tenant has never uploaded a logo, so it stays ignored.
+func TestSaveLogoAltIgnoredWithoutAnyLogo(t *testing.T) {
+	t.Parallel()
+	svc, st := newTestService(t)
+	ctx := context.Background()
+	tenantID := "tenant-alt-no-logo"
+
+	if err := svc.Save(ctx, tenantID, branding.SaveParams{
+		DisplayName: "Acme Ops",
+		LogoAlt:     "orphaned alt text",
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := st.Get(ctx, tenantID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.LogoAlt != "" {
+		t.Fatalf("LogoAlt = %q, want empty (no logo on record to attach alt text to)", got.LogoAlt)
 	}
 }
 

@@ -272,23 +272,23 @@ const brandingPageHTML = `<!doctype html>
 </p>
 <p>
 <label><input type="radio" name="color_mode" value="custom"{{if .HasColor}} checked{{end}}> Custom color</label>
-<input type="color" id="primary_color" name="primary_color"{{if .HasColor}} value="{{.PrimaryColor}}"{{end}}>
+<input type="color" id="primary_color" name="primary_color" aria-label="Custom color value"{{if .HasColor}} value="{{.PrimaryColor}}"{{end}}>
 </p>
 </fieldset>
 
 <p>
 <label for="font_key">Font</label>
-<select id="font_key" name="font_key">
+<select id="font_key" name="font_key" aria-describedby="font-help">
 {{range .FontOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
 {{end}}</select>
 </p>
-<p>Editorial is a serif; Grotesk and Plex are sans-serifs.</p>
+<p id="font-help">Editorial is a serif; Grotesk and Plex are sans-serifs.</p>
 
 <p>
 <label for="logo">Logo</label>
-<input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+<input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-describedby="logo-help">
 </p>
-<p>PNG, JPEG, WebP, or SVG up to 1 MiB.</p>
+<p id="logo-help">PNG, JPEG, WebP, or SVG up to 1 MiB.</p>
 
 {{if .HasLogo}}
 <p><img src="{{.LogoURL}}" alt="{{.LogoAltDisplay}}" width="64" class="logo-preview"></p>

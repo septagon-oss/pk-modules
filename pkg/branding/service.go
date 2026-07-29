@@ -187,13 +187,24 @@ func (s *Service) Save(ctx context.Context, tenantID string, params SaveParams) 
 		return err
 	}
 
+	// hasExistingLogo is read before hasNewLogo (if any) overwrites LogoData
+	// below, so it reflects what was on record walking into this Save.
+	hasExistingLogo := len(rec.LogoData) > 0
+
 	if hasNewLogo {
 		rec.LogoData = params.LogoData
 		rec.LogoContentType = strings.TrimSpace(params.LogoContentType)
-		rec.LogoAlt = logoAlt
 	}
 	// else: no new logo supplied, so rec keeps whatever logo it already had
 	// (nothing, if this is the first Save).
+
+	// LogoAlt applies whenever there is a logo for it to describe — a brand
+	// new upload, or an existing one an admin is only re-labeling — but stays
+	// untouched when the tenant has no logo at all: alt text with nothing to
+	// attach to is not persisted just because it rode along in the form.
+	if hasNewLogo || hasExistingLogo {
+		rec.LogoAlt = logoAlt
+	}
 
 	rec.DisplayName = displayName
 	rec.PrimaryColor = strings.TrimSpace(params.PrimaryColor)

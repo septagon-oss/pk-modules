@@ -296,6 +296,18 @@ func TestAdminPageRenderSetupCopyForNewTenant(t *testing.T) {
 		`name="logo_alt"`,
 		"PNG, JPEG, WebP, or SVG up to 1 MiB.",
 		"Editorial is a serif; Grotesk and Plex are sans-serifs.",
+		// The color input has its own accessible name — the radio refactor
+		// dropped its <label for>, so without this, a screen reader
+		// announces it only as "color, blank" (polish fix).
+		`aria-label="Custom color value"`,
+		// Help text is a sighted-only visual relationship (a <p> sitting
+		// after a control) unless it is wired up explicitly: each help
+		// paragraph carries an id, and the control it describes points at
+		// that id via aria-describedby (polish fix).
+		`id="font-help"`,
+		`aria-describedby="font-help"`,
+		`id="logo-help"`,
+		`aria-describedby="logo-help"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q; body=%s", want, body)
