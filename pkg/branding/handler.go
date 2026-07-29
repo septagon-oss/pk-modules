@@ -171,6 +171,13 @@ func (h *Handler) handleSave(w http.ResponseWriter, r *http.Request, tenantID st
 		FontKey:      r.FormValue("font_key"),
 		LogoAlt:      r.FormValue("logo_alt"),
 	}
+	// clear_color is the admin page's (Task 6) no-JS way to reset the palette:
+	// an HTML color input can never submit "empty" (an unset one still posts
+	// its default, #000000), so the form instead offers a checkbox that, when
+	// present, overrides whatever primary_color was submitted alongside it.
+	if r.FormValue("clear_color") != "" {
+		params.PrimaryColor = ""
+	}
 	file, header, err := r.FormFile("logo")
 	switch {
 	case err == nil:

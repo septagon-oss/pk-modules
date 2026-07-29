@@ -202,6 +202,42 @@ func TestHandlerPostSaveSuccessRedirectsAndPersists(t *testing.T) {
 	}
 }
 
+// TestHandlerPostSaveClearColorIgnoresSubmittedColor proves the admin page's
+// (Task 6) no-JS "use the default palette" checkbox actually works: an HTML
+// color input can never submit "empty" — an unset one still posts its
+// default #000000 — so clear_color=on must override whatever primary_color
+// rode along with it, even when that value looks like a deliberate choice.
+func TestHandlerPostSaveClearColorIgnoresSubmittedColor(t *testing.T) {
+	t.Parallel()
+	svc, _ := newTestService(t)
+	mux := newTestMux(t, svc, "/admin")
+
+	fields := map[string]string{
+		"action":        "save",
+		"display_name":  "Acme Corp",
+		"primary_color": "#14b8a6",
+		"clear_color":   "on",
+	}
+	req := withPrincipal(newMultipartRequest(t, "/api/v1/branding", fields, nil), "tenant-clearcolor")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+
+	profile, err := svc.ResolveBranding(context.Background(), "tenant-clearcolor")
+	if err != nil {
+		t.Fatalf("ResolveBranding: %v", err)
+	}
+	if profile.PrimaryColor != "" {
+		t.Fatalf("PrimaryColor = %q, want empty (clear_color=on should override the submitted color)", profile.PrimaryColor)
+	}
+	if profile.DisplayName != "Acme Corp" {
+		t.Fatalf("DisplayName = %q, want %q", profile.DisplayName, "Acme Corp")
+	}
+}
+
 func TestHandlerPostSaveValidationFailureRedirectsWithError(t *testing.T) {
 	t.Parallel()
 	svc, _ := newTestService(t)

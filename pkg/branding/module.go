@@ -90,7 +90,7 @@ func NewModule(opts ...Option) (*Module, error) {
 	m.svc = NewService(st)
 	m.handler = NewHandler(m.svc, cfg.adminBasePath)
 
-	if err := registerAdmin(cfg); err != nil {
+	if err := registerAdmin(cfg, m.svc); err != nil {
 		return nil, err
 	}
 	if err := registerHealth(cfg.health, st); err != nil {
@@ -143,12 +143,40 @@ func normalizeAdminBasePath(path string) string {
 	return "/" + strings.Trim(path, "/")
 }
 
-// registerAdmin is a stub for v0.1.0: it takes the full config (including the
-// admin registrar and the normalized admin base path) so Task 6 can mount the
-// branding admin page without changing this call site. It intentionally does
-// nothing yet.
-func registerAdmin(cfg config) error {
-	return nil
+// registerAdmin mounts the Branding admin page (admin_page.go): one custom
+// page plus its single sidebar entry, both under adminSidebarLabel
+// ("Workspace"). It takes svc directly rather than reaching back into cfg so
+// the page's Render closure is bound to the same *Service the module's own
+// HTTPHandler uses — one source of truth for a tenant's branding record. A
+// nil registrar (WithAdminRegistrar not called) is a no-op, not an error:
+// the admin surface is an optional dependency (see Compose's
+// OptionalPort[portslib.AdminRegistrar]), mirroring every other reference
+// module's registerAdmin (e.g. tenant/admin.go).
+func registerAdmin(cfg config, svc *Service) error {
+	if cfg.admin == nil {
+		return nil
+	}
+
+	pagePath := cfg.adminBasePath + adminPagePathSuffix
+	page := &adminPageHandler{svc: svc, adminBasePath: cfg.adminBasePath}
+
+	if err := cfg.admin.RegisterPage(portslib.AdminPage{
+		ModuleID: ModuleID,
+		Path:     pagePath,
+		Title:    adminPageTitle,
+		Render:   page.Render,
+	}); err != nil {
+		return fmt.Errorf("branding: admin page: %w", err)
+	}
+
+	return cfg.admin.RegisterSidebarSection(portslib.SidebarSection{
+		ModuleID: ModuleID,
+		Label:    adminSidebarLabel,
+		Order:    adminSidebarOrder,
+		Items: []portslib.SidebarItem{
+			{Path: pagePath, Label: adminPageTitle},
+		},
+	})
 }
 
 // registerHealth registers a "branding_management.store" check that probes
