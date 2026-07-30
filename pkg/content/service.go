@@ -173,7 +173,7 @@ func (s *service) emit(ctx context.Context, c *Content, action string, extra map
 		"slug": c.Slug,
 	}
 	maps.Copy(details, extra)
-	_ = s.audit.Emit(ctx, action, "content:"+c.ID, details)
+	_ = s.audit.Emit(ctx, action, "content:"+c.ID, details) // justified: audit fan-out is best-effort by design (see function comment); the primary content write already succeeded
 }
 
 // generateID synthesizes a deterministic-ish content ID without bringing in a

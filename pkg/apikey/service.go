@@ -159,12 +159,15 @@ func (s *service) Issue(
 	if err := s.store.Create(ctx, row); err != nil {
 		return "", nil, err
 	}
-	out := fromStore(row)
+	out, err := fromStore(row)
+	if err != nil {
+		return "", nil, err
+	}
 	out.Scopes = scopesCopy
 	// Audit emission is best-effort: a transport failure must not roll back the
 	// issued key (which is already persisted) or hide it from the caller.
 	if s.audit != nil {
-		_ = s.audit.Emit(ctx, "apikey.issued", "apikey:"+id, map[string]any{
+		_ = s.audit.Emit(ctx, "apikey.issued", "apikey:"+id, map[string]any{ // justified: the key is already persisted; a best-effort audit emit must not roll it back or hide the plaintext from the caller
 			"tenant_id": tenantID,
 			"user_id":   userID,
 			"name":      name,
@@ -263,9 +266,13 @@ func (s *service) Verify(ctx context.Context, plaintext string) (*APIKey, error)
 		// Bump last_used_at; failure to update is non-fatal because the
 		// verification itself succeeded. The tenant comes from the matched row
 		// (GetByPrefix is global; the verified key selects its own tenant).
-		_ = s.store.UpdateLastUsed(ctx, row.TenantID, row.ID, now)
+		_ = s.store.UpdateLastUsed(ctx, row.TenantID, row.ID, now) // justified: last_used_at is telemetry; failing an otherwise-valid verification over the bump would reject a good key
 		row.LastUsedAt = &now
-		return fromStore(row), nil
+		out, err := fromStore(row)
+		if err != nil {
+			return nil, err
+		}
+		return out, nil
 	}
 	return nil, ErrInvalidKey
 }
@@ -283,7 +290,7 @@ func (s *service) Revoke(ctx context.Context, tenantID, id string) error {
 		return err
 	}
 	if s.audit != nil {
-		_ = s.audit.Emit(ctx, "apikey.revoked", "apikey:"+id, map[string]any{
+		_ = s.audit.Emit(ctx, "apikey.revoked", "apikey:"+id, map[string]any{ // justified: the key is already revoked in the store; a best-effort audit emit must not report the completed revocation as failed
 			"id":        id,
 			"tenant_id": tenantID,
 		})
@@ -302,7 +309,11 @@ func (s *service) List(ctx context.Context, tenantID string) ([]*APIKey, error) 
 	}
 	out := make([]*APIKey, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, fromStore(r))
+		k, err := fromStore(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, k)
 	}
 	return out, nil
 }
@@ -341,14 +352,18 @@ func parsePrefix(plaintext string) (string, bool) {
 	return secret[:12], true
 }
 
-// fromStore converts a storage row into the public APIKey.
-func fromStore(r *store.APIKey) *APIKey {
+// fromStore converts a storage row into the public APIKey. A scopes column
+// that no longer decodes is surfaced rather than silently collapsed to the
+// empty scope set, so callers never act on a key whose grants are unknown.
+func fromStore(r *store.APIKey) (*APIKey, error) {
 	if r == nil {
-		return nil
+		return nil, nil
 	}
 	scopes := []string{}
 	if r.Scopes != "" {
-		_ = json.Unmarshal([]byte(r.Scopes), &scopes)
+		if err := json.Unmarshal([]byte(r.Scopes), &scopes); err != nil {
+			return nil, fmt.Errorf("apikey: decode scopes for key %q: %w", r.ID, err)
+		}
 	}
 	return &APIKey{
 		ID:         r.ID,
@@ -362,5 +377,5 @@ func fromStore(r *store.APIKey) *APIKey {
 		RevokedAt:  r.RevokedAt,
 		ExpiresAt:  r.ExpiresAt,
 		CreatedAt:  r.CreatedAt,
-	}
+	}, nil
 }

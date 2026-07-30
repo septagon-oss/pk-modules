@@ -92,7 +92,7 @@ func newService(
 // short-circuit before reaching the real password comparison.
 func (s *service) decoyVerify(password string) {
 	if s.hasher != nil && s.decoyHash != "" {
-		_ = s.hasher.Verify(password, s.decoyHash)
+		_ = s.hasher.Verify(password, s.decoyHash) // justified: the decoy result is discarded on purpose; the call exists only to equalize login timing and a mismatch is the expected outcome
 	}
 }
 
@@ -177,7 +177,7 @@ func (s *service) Logout(ctx context.Context, sessionID string) error {
 		return err
 	}
 	if s.audit != nil {
-		_ = s.audit.Emit(ctx, "auth.logout", "session:"+sessionID, map[string]any{
+		_ = s.audit.Emit(ctx, "auth.logout", "session:"+sessionID, map[string]any{ // justified: the session is already revoked; audit emission is best-effort and must not report a completed logout as failed
 			"session_id": sessionID,
 		})
 	}
@@ -212,7 +212,7 @@ func (s *service) InvalidateAllSessions(ctx context.Context, userID string) erro
 		return err
 	}
 	if s.audit != nil {
-		_ = s.audit.Emit(ctx, "auth.invalidate_all", "user:"+userID, map[string]any{
+		_ = s.audit.Emit(ctx, "auth.invalidate_all", "user:"+userID, map[string]any{ // justified: the sessions are already revoked; audit emission is best-effort and must not report the completed invalidation as failed
 			"user_id": userID,
 		})
 	}
@@ -240,7 +240,7 @@ func (s *service) emitSuccess(ctx context.Context, tenantID, userID, identifier,
 	if s.audit == nil {
 		return
 	}
-	_ = s.audit.Emit(ctx, "auth.login_success", "user:"+userID, map[string]any{
+	_ = s.audit.Emit(ctx, "auth.login_success", "user:"+userID, map[string]any{ // justified: the login succeeded and the session is persisted; a best-effort audit emit must not fail a valid login
 		"tenant_id":  tenantID,
 		"user_id":    userID,
 		"identifier": identifier,
@@ -252,7 +252,7 @@ func (s *service) emitFailure(ctx context.Context, tenantID, identifier, reason 
 	if s.audit == nil {
 		return
 	}
-	_ = s.audit.Emit(ctx, "auth.login_failure", "tenant:"+tenantID, map[string]any{
+	_ = s.audit.Emit(ctx, "auth.login_failure", "tenant:"+tenantID, map[string]any{ // justified: the caller must receive the auth sentinel for the failed login; a best-effort audit emit cannot be allowed to mask it
 		"tenant_id":  tenantID,
 		"identifier": identifier,
 		"reason":     reason,

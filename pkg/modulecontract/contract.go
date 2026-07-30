@@ -266,7 +266,10 @@ func moduleNames(dir string) ([]string, error) {
 		if shared[name] {
 			continue
 		}
-		matches, _ := filepath.Glob(filepath.Join(entry, "*.go"))
+		matches, err := filepath.Glob(filepath.Join(entry, "*.go"))
+		if err != nil {
+			return nil, fmt.Errorf("modulecontract: glob %s: %w", entry, err)
+		}
 		if len(matches) == 0 {
 			continue
 		}

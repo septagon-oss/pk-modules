@@ -204,7 +204,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.Password != "" {
 		if err := h.svc.SetPassword(r.Context(), tenant, u.ID, input.Password); err != nil {
-			_ = h.svc.Delete(r.Context(), tenant, u.ID)
+			_ = h.svc.Delete(r.Context(), tenant, u.ID) // justified: best-effort compensation after SetPassword failed; that failure is already returned to the client, and a leftover passwordless user cannot authenticate
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -302,5 +302,5 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request, id string) {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v) // justified: the status and headers are already written; an encode failure mid-body cannot be reported to the client
 }

@@ -343,7 +343,7 @@ func (s *Shell) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if urlPath == staticPrefix+"_admin.css" {
 			w.Header().Set("Content-Type", "text/css; charset=utf-8")
 			w.Header().Set("Cache-Control", "public, max-age=300")
-			_, _ = w.Write(s.css)
+			_, _ = w.Write(s.css) // justified: headers are already sent for this static asset; a short write means the client disconnected and nothing can be re-sent
 			return
 		}
 		if urlPath == staticPrefix+"_branding.css" && s.branding != nil {
@@ -667,7 +667,7 @@ func (s *Shell) render(w http.ResponseWriter, page g.Node) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(buf.Bytes())
+	_, _ = w.Write(buf.Bytes()) // justified: the page rendered into the buffer without error and the 200 header is already written; a write failure means the client went away
 }
 
 func (s *Shell) modulesSummary() []moduleSummary {

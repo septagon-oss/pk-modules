@@ -122,7 +122,7 @@ func (s *service) emit(ctx context.Context, n *portslib.Notification, action str
 	if s.audit == nil || n == nil {
 		return
 	}
-	_ = s.audit.Emit(ctx, action, "notification:"+n.ID, map[string]any{
+	_ = s.audit.Emit(ctx, action, "notification:"+n.ID, map[string]any{ // justified: audit fan-out is best-effort; the notification write already succeeded and must not be reported as failed over telemetry
 		"user_id":  n.UserID,
 		"severity": n.Severity,
 		"category": n.Category,

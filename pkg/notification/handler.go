@@ -167,7 +167,7 @@ func (h *Handler) serveSubscriptionItem(w http.ResponseWriter, r *http.Request) 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v) // justified: the status and headers are already written; an encode failure mid-body cannot be reported to the client
 }
 
 func writeError(w http.ResponseWriter, err error) {

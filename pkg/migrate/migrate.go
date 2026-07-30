@@ -109,7 +109,7 @@ var ErrUnknownMigration = errors.New("migrate: database has a migration this bui
 
 // Run applies whatever of migrations this database has not seen, in order.
 // It is safe to call on every boot and safe to call concurrently.
-func Run(ctx context.Context, db *sql.DB, opts Options, migrations []Migration) error {
+func Run(ctx context.Context, db *sql.DB, opts Options, migrations []Migration) (err error) {
 	if db == nil {
 		return errors.New("migrate: nil database")
 	}
@@ -127,7 +127,14 @@ func Run(ctx context.Context, db *sql.DB, opts Options, migrations []Migration) 
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	// A failed unlock leaves a pooled session holding the advisory lock and
+	// would block every future run, so it fails the run unless an earlier
+	// error already explains the state.
+	defer func() {
+		if uerr := unlock(); uerr != nil && err == nil {
+			err = uerr
+		}
+	}()
 
 	if err := ensureLedger(ctx, db, opts.Postgres); err != nil {
 		return err
@@ -239,7 +246,7 @@ func apply(ctx context.Context, db *sql.DB, opts Options, m Migration) error {
 	if err != nil {
 		return fmt.Errorf("migrate: begin %q: %w", m.Name, err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback() }() // justified: after a successful Commit this Rollback returns sql.ErrTxDone by design; on failure paths the original apply/record error is already propagated
 
 	// Re-check under the transaction. The locks above should make this
 	// impossible to hit, which is exactly why it is here: if some caller
@@ -314,21 +321,32 @@ func ensureLedger(ctx context.Context, db *sql.DB, postgres bool) error {
 
 // lock serializes concurrent migration runs on Postgres. SQLite is a
 // single-writer engine and needs no equivalent.
-func lock(ctx context.Context, db *sql.DB, postgres bool) (func(), error) {
+//
+// The returned unlock reports its own failure: Conn.Close returns the session
+// to the pool rather than tearing it down, so a failed pg_advisory_unlock can
+// leave a pooled session holding the lock and silently blocking every future
+// migration run. That is worth surfacing to the caller.
+func lock(ctx context.Context, db *sql.DB, postgres bool) (func() error, error) {
 	if !postgres {
-		return func() {}, nil
+		return func() error { return nil }, nil
 	}
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("migrate: connection for lock: %w", err)
 	}
 	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, lockKey); err != nil {
-		_ = conn.Close()
+		_ = conn.Close() // justified: cleanup on the lock-acquisition failure path; the acquire error below is the actionable one and is returned
 		return nil, fmt.Errorf("migrate: acquire lock: %w", err)
 	}
-	return func() {
-		_, _ = conn.ExecContext(ctx, `SELECT pg_advisory_unlock($1)`, lockKey)
-		_ = conn.Close()
+	return func() error {
+		var uerr error
+		if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_unlock($1)`, lockKey); err != nil {
+			uerr = fmt.Errorf("migrate: release lock: %w", err)
+		}
+		if cerr := conn.Close(); cerr != nil && uerr == nil {
+			uerr = fmt.Errorf("migrate: close lock connection: %w", cerr)
+		}
+		return uerr
 	}, nil
 }
 
