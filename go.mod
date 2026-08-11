@@ -4,12 +4,12 @@ go 1.26
 
 require (
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/septagon-oss/pk-core v0.1.0
-	github.com/septagon-oss/pk-design v0.3.0
-	github.com/septagon-oss/pk-shared v0.2.0
-	github.com/septagon-oss/pk-ui v0.3.0
-	github.com/septagon-oss/styleengine v0.1.0
-	github.com/septagon-oss/tw v0.2.2
+	github.com/septagon-oss/pk-core v0.2.0
+	github.com/septagon-oss/pk-design v0.4.0
+	github.com/septagon-oss/pk-shared v0.5.0
+	github.com/septagon-oss/pk-ui v0.8.0
+	github.com/septagon-oss/styleengine v0.1.1
+	github.com/septagon-oss/tw v0.2.4
 	maragu.dev/gomponents v1.3.0
 	modernc.org/sqlite v1.54.0
 )
