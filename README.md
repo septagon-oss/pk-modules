@@ -1,3 +1,5 @@
+> **Archived on 2026-09-03.** This repository is read-only. It belongs to the 0.x PlatformKit family, superseded by [PlatformKit v1](https://github.com/septagon-oss/platformkit); the 0.x front door is kept under its `legacy-0.x` branch and tags.
+
 # pk-modules
 
 > Part of [PlatformKit](https://github.com/septagon-oss/platformkit) — the open-source Go backend for multi-tenant SaaS.
